@@ -668,3 +668,22 @@ input[type=email], input[type=tel], input[type=password], input[type=search] {
   .activity-feed li { grid-template-columns: 12px minmax(0, 1fr); }
   .activity-feed time { grid-column: 2; }
 }
+
+/* A plain list of rows with actions on the right (workspaces, join requests, email domains). */
+.workspace-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.workspace-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.workspace-list li:last-child {
+  border-bottom: 0;
+}

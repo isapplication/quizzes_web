@@ -83,7 +83,7 @@ function TopBar() {
                 <strong>{me.name}</strong>
                 <span className="muted">{ROLE_WORDS[me.role] ?? me.role} · {me.school.name}</span>
               </div>
-              {me.account && me.account.workspaces > 1 && <Workspaces />}
+              {me.account && <Workspaces onDone={() => setUserMenu(false)} />}
               <Link role="menuitem" href="/home" onClick={() => setUserMenu(false)}>Home</Link>
               {me.schoolSystemUrl && <a role="menuitem" href={me.schoolSystemUrl}>Back to your school&apos;s system</a>}
               {(me.account || me.signedInWith === "PASSWORD") && (
@@ -125,8 +125,11 @@ interface Workspace {
   current: boolean;
 }
 
-/** The account's other workspaces: choosing one switches this tab to it (other tabs stay where they are). */
-function Workspaces() {
+/**
+ * The account's workspaces: choosing one switches this tab to it (other tabs stay where they are). Below them, the
+ * way to join or create a school.
+ */
+function Workspaces({ onDone }: { onDone: () => void }) {
   const [list, setList] = useState<Workspace[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -153,11 +156,12 @@ function Workspaces() {
                 className={w.current ? "current" : ""} onClick={() => open(w)}>
           <span>{w.current ? "✓ " : ""}{w.kind === "INDEPENDENT" ? "Personal: " + w.name : w.name}</span>
           <span className="user-menu-hint">
-            {ROLE_WORDS[w.role] ?? w.role}{w.status === "ACTIVE" ? "" : w.status === "DISABLED" ? " · switched off" : " · paused"}
+            {w.kind === "INDEPENDENT" ? "Your own" : ROLE_WORDS[w.role] ?? w.role}{w.status === "ACTIVE" ? "" : w.status === "DISABLED" ? " · switched off" : " · paused"}
           </span>
         </button>
       ))}
       {error && <span className="user-menu-hint" role="alert">{error}</span>}
+      <Link role="menuitem" href="/workspaces" onClick={onDone}>Join or create a school</Link>
       <hr className="user-menu-sep" />
     </div>
   );

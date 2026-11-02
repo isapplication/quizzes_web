@@ -19,6 +19,27 @@ interface Person {
   status: "ACTIVE" | "DISABLED";
   source: string;
   lastSignInAt: string | null;
+  /** Staff: LINKED (joined with their Quizplayo account), INVITED (not accepted yet) or null. */
+  account: "LINKED" | "INVITED" | null;
+}
+
+interface Invitation {
+  id: string;
+  userId: string;
+  name: string;
+  email: string;
+  role: Role;
+  sentAt: string;
+  expiresAt: string;
+  expired: boolean;
+}
+
+interface JoinRequest {
+  id: string;
+  name: string;
+  email: string;
+  message: string | null;
+  createdAt: string;
 }
 
 interface ImportRow {
@@ -65,6 +86,7 @@ function People() {
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [logins, setLogins] = useState<Login[]>([]);
+  const [changed, setChanged] = useState(0);
 
   const load = useCallback(() => {
     const params = new URLSearchParams();
@@ -73,7 +95,7 @@ function People() {
     api<Person[]>("/api/v1/admin/people?" + params.toString())
       .then(setPeople)
       .catch((e: unknown) => setError(e instanceof ApiError ? e.message : "Quizplayo could not load your people."));
-  }, [filter, query]);
+  }, [filter, query, changed]);
 
   useEffect(() => {
     const t = setTimeout(load, 250);
@@ -110,15 +132,18 @@ function People() {
   return (
     <div className="stack">
       <PageHeader title="People"
-                  description={<>Teachers and admins sign in with their own Quizplayo account (their email) on the sign-in page. Students sign in at <strong>{schoolLink}</strong> with the username and password you give them.</>} />
+                  description={<>Teachers and admins you add get an email invitation, and join with their own Quizplayo account. Students sign in at <strong>{schoolLink}</strong> with the username and password you give them.</>} />
 
       {error && <div className="alert alert-danger" role="alert">{error}</div>}
       {logins.length > 0 && <LoginCards logins={logins} schoolLink={schoolLink} onClose={() => setLogins([])} />}
 
       <div className="people-grid">
-        <AddPerson onAdded={(login) => { load(); if (login) setLogins([login]); }} />
-        <ImportCsv onSaved={(newLogins) => { load(); if (newLogins.length) setLogins(newLogins); }} />
+        <AddPerson onAdded={(login) => { setChanged((n) => n + 1); if (login) setLogins([login]); }} />
+        <ImportCsv onSaved={(newLogins) => { setChanged((n) => n + 1); if (newLogins.length) setLogins(newLogins); }} />
       </div>
+
+      <JoinRequests changed={changed} onDecided={() => setChanged((n) => n + 1)} />
+      <Invitations changed={changed} onChanged={() => setChanged((n) => n + 1)} />
 
       <section className="card stack" aria-labelledby="people-list">
         <div className="row" style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
@@ -153,7 +178,10 @@ function People() {
                   <tr key={p.userId} className={p.status === "DISABLED" ? "muted-row" : undefined}>
                     <td><strong>{p.name}</strong>{p.grade != null && <span className="muted"> · Grade {p.grade === 0 ? "K" : p.grade}</span>}</td>
                     <td>{ROLE_WORDS[p.role] ?? p.role}</td>
-                    <td>{p.email ?? p.username ?? <span className="muted">School portal</span>}</td>
+                    <td>
+                      {p.email ?? p.username ?? <span className="muted">School&apos;s system</span>}
+                      {p.account === "INVITED" && <> <span className="chip chip-warn">Invited</span></>}
+                    </td>
                     <td>{p.classes.join(", ") || <span className="muted">—</span>}</td>
                     <td>{p.lastSignInAt ? new Date(p.lastSignInAt).toLocaleDateString() : <span className="muted">Never</span>}</td>
                     <td>
@@ -212,7 +240,7 @@ function AddPerson({ onAdded }: { onAdded: (login: Login | null) => void }) {
         },
       });
       onAdded(r.firstPassword ? { name: r.person.name, username: r.person.username ?? "", password: r.firstPassword } : null);
-      setNotice(student ? `${r.person.name} was added.` : `${r.person.name} was added and emailed how to sign in.`);
+      setNotice(student ? `${r.person.name} was added.` : `${r.person.name} was added and emailed an invitation to join.`);
       setName(""); setEmail(""); setUsername(""); setClasses("");
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Quizplayo could not add this person.");
@@ -398,4 +426,120 @@ function download(name: string, text: string) {
   a.download = name;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** Staff who haven't accepted their invitation yet: send it again (a new link) or withdraw it. */
+function Invitations({ changed, onChanged }: { changed: number; onChanged: () => void }) {
+  const [list, setList] = useState<Invitation[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    api<Invitation[]>("/api/v1/admin/invitations").then(setList)
+      .catch((e: unknown) => setError(e instanceof ApiError ? e.message : "Quizplayo could not load the invitations."));
+  }, [changed]);
+
+  async function act(i: Invitation, action: "resend" | "revoke") {
+    if (action === "revoke" && !window.confirm(`Withdraw ${i.name}'s invitation? The link in their email stops working.`)) return;
+    setError(null);
+    setNotice(null);
+    try {
+      await api(`/api/v1/admin/invitations/${i.id}/${action}`, { method: "POST" });
+      setNotice(action === "resend" ? `Sent again to ${i.email}, with a new link.` : `${i.name}'s invitation was withdrawn.`);
+      onChanged();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Quizplayo could not do that. Please try again.");
+    }
+  }
+
+  if (!list || (list.length === 0 && !notice && !error)) return null;
+  return (
+    <section className="card stack" aria-labelledby="invitations">
+      <h2 id="invitations" style={{ margin: 0 }}>Invitations not accepted yet</h2>
+      {error && <div className="alert alert-danger" role="alert">{error}</div>}
+      {notice && <div className="alert alert-success">{notice}</div>}
+      {list.length > 0 && (
+        <div className="table-scroll">
+          <table>
+            <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Sent</th><th /></tr></thead>
+            <tbody>
+              {list.map((i) => (
+                <tr key={i.id}>
+                  <td><strong>{i.name}</strong></td>
+                  <td>{i.email}</td>
+                  <td>{ROLE_WORDS[i.role] ?? i.role}</td>
+                  <td>
+                    {new Date(i.sentAt).toLocaleDateString()}
+                    {i.expired && <> <span className="chip chip-warn">Expired</span></>}
+                  </td>
+                  <td className="row" style={{ justifyContent: "flex-end", flexWrap: "wrap" }}>
+                    <button type="button" className="btn btn-light" onClick={() => act(i, "resend")}>Send again</button>
+                    <button type="button" className="btn btn-light" onClick={() => act(i, "revoke")}>Withdraw</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** Teachers on the school's email domain who asked to join: accept (as a teacher or admin) or decline. */
+function JoinRequests({ changed, onDecided }: { changed: number; onDecided: () => void }) {
+  const [list, setList] = useState<JoinRequest[] | null>(null);
+  const [roles, setRoles] = useState<Record<string, Role>>({});
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    api<JoinRequest[]>("/api/v1/admin/join-requests").then(setList)
+      .catch((e: unknown) => setError(e instanceof ApiError ? e.message : "Quizplayo could not load the requests."));
+  }, [changed]);
+
+  async function decide(r: JoinRequest, approve: boolean) {
+    setError(null);
+    setNotice(null);
+    try {
+      await api(`/api/v1/admin/join-requests/${r.id}/${approve ? "approve" : "decline"}`, {
+        method: "POST", body: approve ? { role: roles[r.id] ?? "TEACHER" } : undefined,
+      });
+      setNotice(approve ? `${r.name} joined your school and was emailed.` : `${r.name}'s request was declined.`);
+      onDecided();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Quizplayo could not do that. Please try again.");
+    }
+  }
+
+  if (!list || (list.length === 0 && !notice && !error)) return null;
+  return (
+    <section className="card stack" aria-labelledby="join-requests">
+      <h2 id="join-requests" style={{ margin: 0 }}>Asking to join</h2>
+      <p className="muted" style={{ margin: 0 }}>Teachers with a confirmed email on your school&apos;s domain.</p>
+      {error && <div className="alert alert-danger" role="alert">{error}</div>}
+      {notice && <div className="alert alert-success">{notice}</div>}
+      {list.length > 0 && (
+        <ul className="workspace-list">
+          {list.map((r) => (
+            <li key={r.id}>
+              <div>
+                <strong>{r.name}</strong> <span className="muted">· {r.email} · {new Date(r.createdAt).toLocaleDateString()}</span>
+                {r.message && <p style={{ margin: "4px 0 0" }}>&ldquo;{r.message}&rdquo;</p>}
+              </div>
+              <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                <select aria-label={`Role for ${r.name}`} value={roles[r.id] ?? "TEACHER"}
+                        onChange={(e) => setRoles({ ...roles, [r.id]: e.target.value as Role })}>
+                  <option value="TEACHER">Teacher</option>
+                  <option value="SCHOOL_ADMIN">School admin</option>
+                </select>
+                <button type="button" className="btn btn-primary" onClick={() => decide(r, true)}>Accept</button>
+                <button type="button" className="btn btn-light" onClick={() => decide(r, false)}>Decline</button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
 }

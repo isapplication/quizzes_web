@@ -69,15 +69,18 @@ function ChangePassword() {
   return (
     <div className="stack" style={{ maxWidth: 560 }}>
       <PageHeader title={first ? "Choose your own password" : "Change your password"}
-                  description={first ? "Your school gave you a first password. Choose one only you know."
+                  description={first && account
+                    ? "Your code confirmed that " + me.account?.email + " is yours. For your safety, any password set "
+                      + "before that was removed: choose one only you know. It works in every workspace you belong to."
+                    : first ? "Your school gave you a first password. Choose one only you know."
                     : account ? "For " + me.account?.email + ". It works in every workspace you belong to." : undefined} />
       <form className="card stack" onSubmit={(e) => { e.preventDefault(); save(); }}>
-        <div className="field">
+        {!(first && account) && <div className="field">
           <label htmlFor="pw-current">{first ? "The password your school gave you" : "Current password"}</label>
           <input id="pw-current" type={show ? "text" : "password"} autoComplete="current-password" required={!account}
                  value={current} onChange={(e) => setCurrent(e.target.value)} aria-describedby={account ? "pw-current-hint" : undefined} />
           {account && <p className="hint" id="pw-current-hint">Never set one? Leave this empty.</p>}
-        </div>
+        </div>}
         <div className="field">
           <label htmlFor="pw-new">New password</label>
           <input id="pw-new" type={show ? "text" : "password"} autoComplete="new-password" required minLength={8}

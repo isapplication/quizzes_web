@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { AppFrame } from "@/components/AppFrame";
+import { JoinSuggestion, LinkAccountOffer } from "@/components/MembershipBanners";
 import { normalizePin } from "@/lib/pin";
 import { api, ApiError } from "@/lib/api";
 import { gradeLabel, QuizSummary } from "@/lib/content";
@@ -75,6 +76,8 @@ function TeacherHome() {
         </div>
       )}
       {isSchoolAdmin(me) && !isIndependent(me) && <Checklist />}
+      <LinkAccountOffer />
+      <JoinSuggestion />
 
       <div className="tabs" role="tablist" aria-label="Your dashboard">
         {TABS.map((t) => (

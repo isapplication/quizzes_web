@@ -175,6 +175,7 @@ function SchoolSetup() {
               <dt>Your school&apos;s own system</dt>
               <dd><a href="/admin/connected-system">{setup.people.fromPortal ? "Connected: see its settings" : "Connect it (optional)"}</a></dd>
             </dl>
+            <EmailDomainsSetting />
           </div>
         </li>
 
@@ -246,6 +247,68 @@ function SchoolSetup() {
         </li>
 
       </ol>
+    </div>
+  );
+}
+
+interface Domains {
+  domains: string[];
+  yourDomain: string | null;
+  canClaim: boolean;
+  whyNot: string | null;
+}
+
+/** Teachers with a confirmed email on these domains are offered "Ask to join" (an admin still decides). */
+function EmailDomainsSetting() {
+  const [d, setD] = useState<Domains | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    api<Domains>("/api/v1/admin/email-domains").then(setD)
+      .catch((e: unknown) => setError(e instanceof ApiError ? e.message : "Quizplayo could not load your email domains."));
+  }, []);
+
+  async function change(path: string, body?: unknown) {
+    setError(null);
+    try {
+      setD(await api<Domains>(path, { method: "POST", body }));
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Quizplayo could not save that. Please try again.");
+    }
+  }
+
+  return (
+    <div className="stack" style={{ gap: 8 }}>
+      <h3 style={{ margin: 0 }}>Your school&apos;s email domain</h3>
+      <p className="muted" style={{ margin: 0 }}>
+        Teachers who sign up with an email on it see &quot;Is this your school? Ask to join&quot;, and you accept or decline
+        them under People.
+      </p>
+      {error && <div className="alert alert-danger" role="alert">{error}</div>}
+      {d && (
+        <>
+          {d.domains.length > 0 ? (
+            <ul className="workspace-list">
+              {d.domains.map((x) => (
+                <li key={x}>
+                  <strong>@{x}</strong>
+                  <button type="button" className="btn btn-light" onClick={() => change("/api/v1/admin/email-domains/drop", { domain: x })}>
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : <p style={{ margin: 0 }}>None yet.</p>}
+          {d.canClaim && d.yourDomain && (
+            <div>
+              <button type="button" className="btn btn-secondary" onClick={() => change("/api/v1/admin/email-domains/claim")}>
+                Add @{d.yourDomain}
+              </button>
+            </div>
+          )}
+          {d.whyNot && <p className="hint" style={{ margin: 0 }}>{d.whyNot}</p>}
+        </>
+      )}
     </div>
   );
 }
