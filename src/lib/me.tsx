@@ -38,12 +38,12 @@ export interface Me {
     /** The grades it teaches; empty for a personal workspace whose teacher hasn't picked them yet. */
     grades: number[];
   };
-  /** The school portal, for people who signed in through it; otherwise null. */
-  portalUrl: string | null;
+  /** For someone who came from their school's own system: where to go back to; otherwise null. */
+  schoolSystemUrl: string | null;
   devTools: boolean;
   /** Signed in through the platform team's two-step sign-in, and on the console's allowlist. */
   platformTeam: boolean;
-  /** How this person signed in this time: SCHOOL_PORTAL, PASSWORD, EMAIL_CODE, SIGN_UP, PLATFORM or SWITCH. */
+  /** How this person signed in this time: SSO, PASSWORD, EMAIL_CODE, SIGN_UP, PLATFORM or SWITCH. */
   signedInWith: string;
   /** Their Quizplayo account (teachers and admins); null for students and school-portal sign-ins. */
   account: { email: string; verified: boolean; workspaces: number } | null;

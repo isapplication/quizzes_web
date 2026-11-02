@@ -34,7 +34,7 @@ function ChangePassword() {
     return (
       <div className="stack" style={{ maxWidth: 560 }}>
         <PageHeader title="Your password" />
-        <div className="alert">You sign in with your school portal, so you have no Quizplayo password.</div>
+        <div className="alert">You sign in through your school&apos;s own system, so you have no Quizplayo password.</div>
       </div>
     );
   }

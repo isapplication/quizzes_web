@@ -26,9 +26,8 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return [
       { source: "/api/:path*", destination: `${api}/api/:path*` },
-      { source: "/oauth2/:path*", destination: `${api}/oauth2/:path*` },
-      { source: "/login/oauth2/:path*", destination: `${api}/login/oauth2/:path*` },
-      { source: "/logout", destination: `${api}/logout` },
+      // Quizplayo's public key, for schools' own systems to check the requests Quizplayo signs.
+      { source: "/.well-known/jwks.json", destination: `${api}/.well-known/jwks.json` },
     ];
   },
 };

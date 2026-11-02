@@ -20,7 +20,7 @@ interface Setup {
     theme: Record<string, string>;
     grades: number[];
   };
-  signIn: { schoolPage: string | null; portalTileLink: string };
+  signIn: { schoolPage: string | null };
   people: { classes: number; teachers: number; students: number; lastSyncedAt: string | null; done: boolean; fromPortal: boolean };
   bank: { quizzes: number; importedGrades: number[]; suggestedGrades: number[]; done: boolean };
   brandDone: boolean;
@@ -116,20 +116,13 @@ function SchoolSetup() {
             <div className="row">
               <span>
                 <strong>{s.name}</strong> ·{" "}
-                {setup.people.fromPortal ? "default colours from the school portal; set your own in Brand settings"
-                  : <>set your logo, icon and colours in <a href="/admin/brand">Brand settings</a></>}
+                set your logo, icon and colours in <a href="/admin/brand">Brand settings</a>
               </span>
               <span className="row" aria-label="School colours">
                 {swatches.map((v) => (
                   <span key={v} title={v} style={{ width: 22, height: 22, borderRadius: 4, background: s.theme[v], border: "1px solid var(--border)" }} />
                 ))}
               </span>
-              {setup.people.fromPortal && (
-                <button className="btn btn-light" type="button" disabled={busy !== null}
-                        onClick={() => run("branding", "/api/v1/admin/setup/refresh-branding", "POST")}>
-                  {busy === "branding" ? "Refreshing…" : "Refresh from school portal"}
-                </button>
-              )}
             </div>
             <div className="form-grid">
               <div className="field">
@@ -173,18 +166,14 @@ function SchoolSetup() {
             <h2>Sign-in</h2>
             <p>
               {setup.people.fromPortal
-                ? "Your school signs in with its school portal accounts. Nobody needs a second password."
+                ? "Your school's own system signs people in to Quizplayo. Nobody needs a second password."
                 : "Teachers and admins sign in with their own Quizplayo account (their email); students sign in on your school's page with the username and password you give them."}
             </p>
             <dl className="detail-grid">
               <dt>Your school&apos;s sign-in page</dt>
               <dd>{setup.signIn.schoolPage ? <a href={setup.signIn.schoolPage}>{setup.signIn.schoolPage}</a> : "Save a school code first."}</dd>
-              {setup.people.fromPortal && (
-                <>
-                  <dt>Link for the school portal&apos;s Quizplayo tile</dt>
-                  <dd><code style={{ wordBreak: "break-all" }}>{setup.signIn.portalTileLink}</code></dd>
-                </>
-              )}
+              <dt>Your school&apos;s own system</dt>
+              <dd><a href="/admin/connected-system">{setup.people.fromPortal ? "Connected: see its settings" : "Connect it (optional)"}</a></dd>
             </dl>
           </div>
         </li>
@@ -196,14 +185,14 @@ function SchoolSetup() {
             {setup.people.fromPortal ? (
               <>
                 <p>
-                  Copied from the school portal: <strong>{setup.people.classes}</strong> classes, <strong>{setup.people.teachers}</strong>{" "}
+                  Copied from your school&apos;s system: <strong>{setup.people.classes}</strong> classes, <strong>{setup.people.teachers}</strong>{" "}
                   teachers, <strong>{setup.people.students}</strong> students.
                   {setup.people.lastSyncedAt && <span className="muted"> Last copied {new Date(setup.people.lastSyncedAt).toLocaleString()}.</span>}
                 </p>
                 <div>
                   <button className="btn btn-secondary" type="button" disabled={busy !== null}
                           onClick={() => run("people", "/api/v1/admin/setup/roster-sync", "POST")}>
-                    {busy === "people" ? "Copying…" : setup.people.done ? "Copy again" : "Copy classes from the school portal"}
+                    {busy === "people" ? "Copying…" : setup.people.done ? "Copy again" : "Copy people now"}
                   </button>
                 </div>
               </>

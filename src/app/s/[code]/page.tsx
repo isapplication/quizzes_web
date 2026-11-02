@@ -13,7 +13,8 @@ interface SchoolPage {
   city: string | null;
   status: string;
   theme: Record<string, string>;
-  signInUrl: string;
+  /** The school's own system, when it is connected; null otherwise. */
+  signInUrl: string | null;
   brand: SchoolBrand;
 }
 
@@ -64,7 +65,7 @@ export default function SchoolSignIn({ params }: { params: Promise<{ code: strin
                 <>
                   <h2 style={{ margin: 0 }}>Sign in</h2>
                   <SchoolSignInForms school={code} methods={methods}
-                                     portalUrl={methods.includes("SCHOOL_PORTAL") ? school.signInUrl : null} />
+                                     schoolSystemUrl={school.signInUrl} />
                 </>
               )}
             </div>

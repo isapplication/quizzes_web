@@ -7,13 +7,14 @@ import { nextFromUrl, Started, startTab } from "@/lib/auth";
 import { PasswordInput } from "@/components/PasswordInput";
 
 /**
- * Sign-in on a school's own page. Students use the username and password the school gave them; teachers and admins
- * sign in with their own Quizplayo account on /sign-in. The answer is this tab's own session key (see lib/tab.ts).
+ * Sign-in on a school's own page: through the school's own system when it is connected; students with the username
+ * and password the school gave them; teachers and admins with their own Quizplayo account on /sign-in. The answer is
+ * this tab's own session key (see lib/tab.ts).
  */
-export function SchoolSignInForms({ school, methods, portalUrl }: {
+export function SchoolSignInForms({ school, methods, schoolSystemUrl }: {
   school: string;
   methods: string[];
-  portalUrl: string | null;
+  schoolSystemUrl: string | null;
 }) {
   const studentOk = methods.includes("PASSWORD");
   const [username, setUsername] = useState("");
@@ -36,6 +37,13 @@ export function SchoolSignInForms({ school, methods, portalUrl }: {
 
   return (
     <div className="stack">
+      {schoolSystemUrl && (
+        <>
+          <a className="btn btn-primary btn-big" href={schoolSystemUrl}>Sign in through your school</a>
+          <p className="muted" style={{ margin: 0, textAlign: "center" }}>With the account you use for your school&apos;s own system.</p>
+          {studentOk && <div className="divider-text">or</div>}
+        </>
+      )}
       {studentOk && (
         <form className="stack" onSubmit={(e) => { e.preventDefault(); signIn(); }}>
           <h3 style={{ margin: 0 }}>Students</h3>
@@ -60,7 +68,6 @@ export function SchoolSignInForms({ school, methods, portalUrl }: {
       {studentOk && <div className="divider-text">or</div>}
       <Link className="btn btn-light" href="/sign-in">Teacher or admin? Sign in with your email</Link>
 
-      {portalUrl && <a className="btn btn-light" href={portalUrl}>Sign in with your school portal</a>}
 
       <p className="muted" style={{ textAlign: "center", margin: 0 }}>
         Joining a live game? <Link href="/play">Enter the game PIN</Link>, no account needed.

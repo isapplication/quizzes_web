@@ -160,7 +160,7 @@ function Checklist() {
 
   if (!setup || setup.dismissed) return null;
   const items = [
-    { done: setup.people.done, label: setup.people.fromPortal ? "Copy your classes from the school portal" : "Add your teachers and students",
+    { done: setup.people.done, label: setup.people.fromPortal ? "Copy people from your school's system" : "Add your teachers and students",
       href: setup.people.fromPortal ? "/admin/setup" : "/admin/people" },
     { done: setup.bank.done, label: "Choose the question-bank grades", href: "/admin/setup#bank" },
     { done: setup.brandDone, label: "Add your logo and colours", href: "/admin/brand" },

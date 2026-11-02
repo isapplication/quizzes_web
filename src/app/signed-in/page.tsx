@@ -32,7 +32,7 @@ export default function SignedIn() {
     <PublicShell narrow>
       {problem ? (
         <StatusCard tone="problem" title="Sign-in did not finish"
-                    actions={[{ label: "Sign in again", href: "/login?next=/home", primary: true }, { label: "Get help", href: "/help" }]}>
+                    actions={[{ label: "Sign in again", href: "/sign-in", primary: true }, { label: "Get help", href: "/help" }]}>
           <p>{problem}</p>
         </StatusCard>
       ) : (

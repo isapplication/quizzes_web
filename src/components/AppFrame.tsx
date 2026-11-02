@@ -85,7 +85,7 @@ function TopBar() {
               </div>
               {me.account && me.account.workspaces > 1 && <Workspaces />}
               <Link role="menuitem" href="/home" onClick={() => setUserMenu(false)}>Home</Link>
-              {me.portalUrl && <a role="menuitem" href={me.portalUrl}>Back to school portal</a>}
+              {me.schoolSystemUrl && <a role="menuitem" href={me.schoolSystemUrl}>Back to your school&apos;s system</a>}
               {(me.account || me.signedInWith === "PASSWORD") && (
                 <Link role="menuitem" href="/account/password" onClick={() => setUserMenu(false)}>Change password</Link>
               )}
@@ -112,7 +112,7 @@ function TopBar() {
 /** Where another person signs in: the account sign-in for staff, the school's page for its students. */
 function someoneElsePage(me: Me): string {
   if (me.account) return "/sign-in";
-  if (me.signedInWith === "SCHOOL_PORTAL") return "/api/v1/auth/login?another=true&next=%2Fhome";
+  if (me.schoolSystemUrl) return me.schoolSystemUrl;
   return me.school.code ? "/s/" + me.school.code : "/sign-in";
 }
 
@@ -213,35 +213,12 @@ function Footer() {
 }
 
 /**
- * Signs this tab's person out of Quizplayo (or, everywhere, every person signed in on this browser), then out of
- * the school portal: the ID token goes in a POST form, never in a URL. Other tabs keep their own people unless
- * it is everywhere.
+ * Signs this tab's person out of Quizplayo (or, everywhere, every person signed in on this browser). Other tabs keep
+ * their own people unless it is everywhere. A school's own system keeps its own sign-in.
  */
 async function signOut(everywhere: boolean) {
-  const r = await api<{ endSessionUrl: string; idTokenHint: string; postLogoutRedirectUri: string; clientId: string }>(
-    everywhere ? "/api/v1/auth/logout?everywhere=true" : "/api/v1/auth/logout",
-    { method: "POST" },
-  ).catch(() => null);
+  await api(everywhere ? "/api/v1/auth/logout?everywhere=true" : "/api/v1/auth/logout", { method: "POST" }).catch(() => null);
   clearTabKey();
   if (everywhere) announceSignedOutEverywhere();
-  if (!r || !r.idTokenHint) {
-    window.location.href = "/";
-    return;
-  }
-  const form = document.createElement("form");
-  form.method = "POST";
-  form.action = r.endSessionUrl;
-  for (const [name, value] of Object.entries({
-    id_token_hint: r.idTokenHint,
-    post_logout_redirect_uri: r.postLogoutRedirectUri,
-    client_id: r.clientId,
-  })) {
-    const input = document.createElement("input");
-    input.type = "hidden";
-    input.name = name;
-    input.value = value;
-    form.appendChild(input);
-  }
-  document.body.appendChild(form);
-  form.submit();
+  window.location.href = "/";
 }
