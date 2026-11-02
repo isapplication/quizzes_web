@@ -1,0 +1,40 @@
+/*
+ * Quizplayo design tokens. Defaults are the Quizplayo theme (plan-structure-sso-theme.md,
+ * section 4). At sign-in the app replaces them with the school's own School Setup values, so a partner
+ * school sees its colours without code changes. Components use only these variables, never raw colours.
+ */
+:root {
+  --pc: #007fff;
+  --plc: #eaf2fa;
+  --pgc: linear-gradient(90deg, #0B65FF, #2862C5);
+  --sc: #001b47;
+  --slc: #f9f3fb;
+  --tc: #f28c28;
+  --tlc: #fff1e3;
+  --fc: #2862C5;
+  --flc: #fef5da;
+  --success: green;
+  --warning: #f7b924;
+  --danger: #d92550;
+
+  /* Neutrals for text, borders and page background. */
+  --ink: #1f2a3d;
+  --muted: #5b6577;
+  --border: #d6dde8;
+  --page: #f5f8fc;
+  --card: #ffffff;
+  --on-dark: #ffffff;
+
+  /* Answer colours (D5): each has its own shape, so colour is never the only cue. */
+  --a1: var(--pc);
+  --a1-text: #ffffff;
+  --a2: var(--sc);
+  --a2-text: #ffffff;
+  --a3: var(--warning);
+  --a3-text: var(--sc);
+  --a4: var(--danger);
+  --a4-text: #ffffff;
+
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  --radius: 8px;
+}
