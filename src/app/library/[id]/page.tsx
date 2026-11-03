@@ -96,7 +96,7 @@ function LibraryQuiz() {
           Activities are done at each student&apos;s own pace, so they aren&apos;t played live. Assign it to a class or share its link.
         </p>
       ) : (
-        <HostGame target={{ libraryQuizId: q.libraryQuizId }} playable={detail.questions.length} total={detail.questions.length} />
+        <HostGame target={{ libraryQuizId: q.libraryQuizId }} playable={detail.questions.length} total={detail.questions.length} grade={q.grade} />
       )}
       <div id="assign"><AssignBox target={{ libraryQuizId: q.libraryQuizId }} /></div>
 

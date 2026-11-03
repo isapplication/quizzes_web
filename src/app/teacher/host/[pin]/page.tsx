@@ -2,8 +2,12 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { AnswerTile, GAME_MODES, TeamBadge, TimerBar, useCountdown } from "@/components/Stage";
+import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
+import { GAME_MODES, GameTile, GameTimer, TeamBadge, useCountdown } from "@/components/Stage";
+import { GameLook } from "@/components/live/GameLook";
+import { Buddy, Confetti } from "@/components/live/LookArt";
+import { lookBand, lookWords, type Band } from "@/lib/gameLook";
+import { lobbyLength, useGameSound } from "@/lib/gameSound";
 import { api } from "@/lib/api";
 import { connectLive, LiveConnection, LiveMessage, LiveStatus } from "@/lib/live";
 import { MeProvider, ownBrand, ShownBrand, useMe } from "@/lib/me";
@@ -19,6 +23,8 @@ interface Hosted {
   ticket: string;
   questionCount: number;
   brand: ShownBrand;
+  /** The grade (0 to 12) whose game look the screens use; null for a game from before game looks. */
+  lookGrade: number | null;
 }
 
 interface Player {
@@ -97,6 +103,12 @@ function HostScreen() {
   const [podium, setPodium] = useState<{ top: Ranked[]; leaderboard: Ranked[]; teams?: TeamStanding[] } | null>(null);
   const [mode, setMode] = useState("CLASSIC");
   const [teamCount, setTeamCount] = useState(0);
+  // After a question closes: its answers first, then the leaderboard when the teacher asks for it.
+  const [showBoard, setShowBoard] = useState(false);
+  const look = game?.lookGrade ?? null;
+  const band = lookBand(look);
+  const words = lookWords(band);
+  const { sound, muted, toggle } = useGameSound(band);
   const live = useRef<LiveConnection | null>(null);
   const serverNow = useCallback(() => live.current?.serverNow() ?? Date.now(), []);
 
@@ -148,6 +160,7 @@ function HostScreen() {
         break;
       case "closed":
         setClosed(m as unknown as Closed);
+        setShowBoard(false);
         setView("results");
         break;
       case "podium":
@@ -192,38 +205,58 @@ function HostScreen() {
     live.current?.send({ type, ...extra });
   };
 
+  // The family's sounds: a lobby tune while players join, the reveal, and a fanfare for the podium.
+  useEffect(() => {
+    if (view !== "lobby" || !game) return;
+    sound("lobby");
+    const id = setInterval(() => sound("lobby"), lobbyLength(band) + 1500);
+    return () => clearInterval(id);
+  }, [view, game, band, sound]);
+  useEffect(() => {
+    if (view === "results") sound("reveal");
+    if (view === "podium") sound("fanfare");
+  }, [view, sound]);
+
   const joinUrl = typeof window === "undefined" ? "" : window.location.host + "/play";
+  const lastQuestion = closed?.last ?? false;
 
   return (
-    <div className="stage">
-      <div className="stage-bar">
+    <GameLook grade={look} kind="host">
+      <header className="gl-bar">
         <OwnerBrandMark brand={shown} />
-        <span className="spacer" />
-        {game && <span>{game.quizTitle}{game.classCode && <> · Class {game.classCode}</>}</span>}
-        <span className="status-pill">{status === "connected" ? `Live · ${live.current?.transport() ?? ""}` : status}</span>
+        <span className="gl-spacer" />
+        {game && <span className="gl-pill">{game.quizTitle}{game.classCode && <> · Class {game.classCode}</>}</span>}
+        <span className="gl-pill" role="status">{status === "connected" ? "● Live" : status === "reconnecting" ? "Reconnecting…" : status}</span>
+        <button type="button" className="gl-quiet" onClick={toggle} aria-pressed={muted}>
+          {muted ? "🔇 Sound off" : "🔊 Sound on"}
+        </button>
         {view !== "podium" && view !== "lobby" && (
-          <button className="btn btn-light" onClick={() => window.confirm("End the game now and show the podium?") && send("end")}>
+          <button type="button" className="gl-quiet" onClick={() => window.confirm("End the game now and show the podium?") && send("end")}>
             End game
           </button>
         )}
         {(view === "podium" || view === "lobby") && (
-          <a className="btn btn-light" href="/home?tab=games"
+          <a className="gl-quiet" href="/home?tab=games"
              onClick={(e) => { if (view === "lobby" && !window.confirm("Leave the lobby? Players who joined will be sent away.")) e.preventDefault(); }}>
             Back to My quizzes
           </a>
         )}
-      </div>
-      <main className="stage-main">
-        {error && <div className="alert alert-danger">{error}</div>}
+      </header>
+      <main className="gl-main">
+        {error && <div className="gl-alert danger" role="alert">{error}</div>}
 
         {view === "lobby" && game && (
           <>
-            <div className="row" style={{ justifyContent: "center", gap: 24 }}>
-              <div className="pin-box">
-                <div>Join at <strong>{joinUrl}</strong></div>
-                <div className="muted" style={{ color: "var(--muted)" }}>Game PIN</div>
-                <div className="pin">{formatPin(game.pin)}</div>
+            <div className="gl-lobby-top gl-in">
+              <div className="gl-card gl-join" style={{ "--i": 0 } as CSSProperties}>
+                <span>Join on any device at</span>
+                <b>{joinUrl}</b>
               </div>
+              <div className="gl-card gl-pin-card" style={{ "--i": 1 } as CSSProperties}>
+                <div className="lbl">Game PIN</div>
+                <div className="gl-pin" aria-label={"Game PIN " + game.pin.split("").join(" ")}>{formatPin(game.pin)}</div>
+              </div>
+              <Buddy grade={look} className="gl-buddy-lobby" />
             </div>
             <p style={{ textAlign: "center", margin: 0 }}>
               {GAME_MODES.find((g) => g.value === mode)?.label ?? "Classic"} game
@@ -231,124 +264,156 @@ function HostScreen() {
               {mode === "ACCURACY" && <> · no timer: you close each question</>}
             </p>
             {mode === "TEAM" && teamCount > 0 && (
-              <div className="row" style={{ justifyContent: "center", gap: 8, flexWrap: "wrap" }}>
+              <div className="gl-row center">
                 {Array.from({ length: teamCount }, (_, i) => i + 1).map((t) => (
-                  <span key={t} className="row" style={{ gap: 6 }}>
+                  <span key={t} className="gl-row" style={{ gap: 6 }}>
                     <TeamBadge team={t} /> {players.filter((p) => p.team === t).length}
                   </span>
                 ))}
               </div>
             )}
-            <div className="row">
-              <h2>{playerCount} {playerCount === 1 ? "player" : "players"}</h2>
-              <span className="spacer" />
-              <button className="btn btn-primary" style={{ fontSize: 20 }} disabled={playerCount === 0} onClick={() => send("start")}>
+            <div className="gl-row">
+              <span className="gl-pill">👥 {playerCount} {playerCount === 1 ? "player" : "players"}</span>
+              <span className="gl-spacer" />
+              <button type="button" className="gl-btn gl-btn-big" disabled={playerCount === 0} onClick={() => send("start")}>
                 Start game
               </button>
             </div>
-            <div className="player-chips">
-              {players.map((p) => (
-                <span key={p.id} className={"player-chip" + (p.connected ? "" : " away")}>
+            <ul className="gl-chips gl-in" aria-label="Players">
+              {players.map((p, i) => (
+                <li key={p.id} className={"gl-chip" + (p.connected ? "" : " away")} style={{ "--i": Math.min(i, 20) } as CSSProperties}>
                   {p.team > 0 && <TeamBadge team={p.team} />}
                   {p.name}
                   <button type="button" title={"Remove " + p.name} aria-label={"Remove " + p.name}
                     onClick={() => window.confirm(`Remove ${p.name} from the game?`) && send("kick", { playerId: p.id })}>
                     ×
                   </button>
-                </span>
+                </li>
               ))}
-              {playerCount > players.length && <span className="player-chip away">+{playerCount - players.length} more</span>}
-              {playerCount === 0 && <p className="muted">Waiting for students to join with the PIN…</p>}
-            </div>
+              {playerCount > players.length && <li className="gl-chip away">+{playerCount - players.length} more</li>}
+            </ul>
+            {playerCount === 0 && <p style={{ textAlign: "center", margin: 0 }}>Waiting for students to join with the PIN…</p>}
           </>
         )}
 
-        {view === "intro" && intro && <Intro intro={intro} serverNow={serverNow} />}
+        {view === "intro" && intro && <Intro intro={intro} serverNow={serverNow} grade={look} />}
 
         {view === "question" && question && (
           <>
-            <div className="row">
-              <span>Question {question.index + 1} of {question.total}</span>
-              <span className="spacer" />
-              {question.timed !== false && <Countdown closesAt={question.closesAt} serverNow={serverNow} />}
+            <div className="gl-row">
+              <span className="gl-pill">Question {question.index + 1} of {question.total}</span>
+              <span className="gl-spacer" />
+              {question.timed !== false && band !== "h912" && (
+                <GameTimer band={band} openedAt={question.openedAt} closesAt={question.closesAt} serverNow={serverNow} />
+              )}
+              <div className="gl-answered" aria-live="polite"><b>{answered.answered}</b>of {answered.expected} answered</div>
               {question.timed === false
-                ? <button className="btn btn-primary" style={{ fontSize: 20 }} onClick={() => send("skip")}>Close question</button>
-                : <button className="btn btn-light" onClick={() => send("skip")}>Skip</button>}
+                ? <button type="button" className="gl-btn" onClick={() => send("skip")}>Close question</button>
+                : <button type="button" className="gl-quiet" onClick={() => send("skip")}>Skip</button>}
             </div>
-            {question.timed !== false && <TimerBar openedAt={question.openedAt} closesAt={question.closesAt} serverNow={serverNow} />}
-            {question.visual && <span className="question-visual-big" aria-hidden="true">{question.visual}</span>}
-            <div className="question-text">{question.text}</div>
-            <div className="row" style={{ justifyContent: "center" }}>
-              <div className="big-number">{answered.answered}</div>
-              <div>of {answered.expected} answered</div>
+            {question.timed !== false && band === "h912" && (
+              <GameTimer band={band} openedAt={question.openedAt} closesAt={question.closesAt} serverNow={serverNow} />
+            )}
+            {question.timed !== false && <Ticks closesAt={question.closesAt} serverNow={serverNow} tick={() => sound("tick")} />}
+            <div className="gl-q-row gl-in">
+              <h1 className="gl-card gl-q">
+                {question.visual && <span className="gl-visual" aria-hidden="true">{question.visual}</span>}{question.text}
+              </h1>
+              <Buddy grade={look} className="gl-buddy-side" />
             </div>
-            <div className="answer-grid">
+            <div className="gl-tiles gl-in">
+              {question.choices.map((c, i) => <GameTile key={i} index={i} text={c} />)}
+            </div>
+          </>
+        )}
+
+        {view === "results" && closed && question && !showBoard && (
+          <>
+            <div className="gl-row">
+              <span className="gl-pill">Question {closed.index + 1} of {question.total}</span>
+              <span className="gl-spacer" />
+              <button type="button" className="gl-btn gl-btn-big" onClick={() => (closed.leaderboard.length > 0 ? setShowBoard(true) : send("next"))}>
+                {closed.leaderboard.length > 0 ? (band === "m68" ? "High scores" : "Leaderboard") : lastQuestion ? "Show podium" : "Next question"}
+              </button>
+            </div>
+            <div className="gl-q-row gl-in">
+              <h1 className="gl-card gl-q">
+                {question.text}
+                {closed.explanation && <span className="gl-explain">{closed.explanation}</span>}
+              </h1>
+              <Buddy grade={look} mood="happy" className="gl-buddy-side" />
+            </div>
+            <div className="gl-tiles gl-in">
               {question.choices.map((c, i) => (
-                <AnswerTile key={i} index={i} text={c} />
+                <GameTile key={i} index={i} text={c} count={closed.counts[i]} state={i === closed.correctIndex ? "correct" : "dim"} />
               ))}
             </div>
           </>
         )}
 
-        {view === "results" && closed && question && (
+        {view === "results" && closed && question && showBoard && (
           <>
-            <div className="row">
-              <span>Question {closed.index + 1} of {question.total}</span>
-              <span className="spacer" />
-              <button className="btn btn-primary" style={{ fontSize: 20 }} onClick={() => send("next")}>
-                {closed.last ? "Show podium" : "Next question"}
+            <div className="gl-row">
+              <span className="gl-pill">After question {closed.index + 1} of {question.total}</span>
+              <span className="gl-spacer" />
+              <button type="button" className="gl-btn gl-btn-big" onClick={() => send("next")}>
+                {lastQuestion ? "Show podium" : "Next question"}
               </button>
             </div>
-            <div className="question-text">{question.text}</div>
-            <div className="answer-grid">
-              {question.choices.map((c, i) => (
-                <AnswerTile key={i} index={i} text={c} count={closed.counts[i]}
-                  state={i === closed.correctIndex ? "correct" : "wrong"} />
-              ))}
-            </div>
-            {closed.explanation && <div className="card">{closed.explanation}</div>}
             {closed.teams && closed.teams.length > 0 && <TeamStandings teams={closed.teams} title="Teams" />}
-            {closed.leaderboard.length > 0 && (
-              <div>
-                <h2 style={{ marginBottom: 10 }}>{closed.teams && closed.teams.length > 0 ? "Top players" : "Leaderboard"}</h2>
-                <ol className="leaderboard">
-                  {closed.leaderboard.map((r) => (
-                    <li key={r.id}><span>{r.rank}. {r.name}</span><span>{r.score}</span></li>
-                  ))}
-                </ol>
-              </div>
-            )}
+            <h2 className="gl-title">{closed.teams && closed.teams.length > 0 ? "Top players" : words.leaderboard}</h2>
+            <Board rows={closed.leaderboard} />
           </>
         )}
 
         {view === "podium" && podium && (
           <>
-            <h1 style={{ textAlign: "center" }}>Podium</h1>
+            <Confetti band={band} />
+            <h1 className="gl-title">{words.podium}</h1>
             {podium.teams && podium.teams.length > 0 && (
-              <div style={{ maxWidth: 700, margin: "0 auto", width: "100%" }}>
+              <div style={{ maxWidth: 900, margin: "0 auto", width: "100%" }}>
                 <TeamStandings teams={podium.teams} title={"Team " + podium.teams[0].team + " wins!"} />
               </div>
             )}
-            <div className="podium">
-              {[1, 0, 2].map((i) => podium.top[i] && (
-                <div key={podium.top[i].id}>
-                  <div className="name">{podium.top[i].name}</div>
-                  <div>{podium.top[i].score} points</div>
-                  <div className="block" style={{ height: [200, 150, 110][i] }}>{podium.top[i].rank}</div>
-                </div>
-              ))}
+            <Podium top={podium.top} grade={look} band={band} />
+            <div className="gl-row center">
+              {game && <Link className="gl-btn" href={"/teacher/games/" + game.gameId}>See the full report</Link>}
             </div>
-            <p className="muted" style={{ textAlign: "center" }}>
-              {game && <Link className="btn btn-light" href={"/teacher/games/" + game.gameId}>See the full report</Link>}
-            </p>
-            <ol className="leaderboard" style={{ maxWidth: 700, margin: "0 auto", width: "100%" }}>
-              {podium.leaderboard.map((r) => (
-                <li key={r.id}><span>{r.rank}. {r.name}</span><span>{r.score}</span></li>
-              ))}
-            </ol>
+            {podium.leaderboard.length > 3 && <Board rows={podium.leaderboard} />}
           </>
         )}
       </main>
+    </GameLook>
+  );
+}
+
+function Board({ rows }: { rows: Ranked[] }) {
+  return (
+    <ol className="gl-board gl-in">
+      {rows.map((r, i) => (
+        <li key={r.id} style={{ "--i": Math.min(i, 10) } as CSSProperties}>
+          <span className="rk gl-on">{r.rank}</span>
+          <span className="nm">{r.name}</span>
+          <span className="sc">{r.score.toLocaleString()}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/** First place in the middle, second on the left, third on the right; each block says its place in words too. */
+function Podium({ top, grade, band }: { top: Ranked[]; grade: number | null; band: Band }) {
+  const places = ["First", "Second", "Third"];
+  return (
+    <div className="gl-podium gl-in">
+      {[1, 0, 2].map((i) => top[i] && (
+        <div key={top[i].id} className={"col p" + (i + 1)} style={{ "--i": [1, 0, 2][i] } as CSSProperties}>
+          {i === 0 && band === "k2" && <Buddy grade={grade} mood="happy" />}
+          <div className="who">{top[i].name}</div>
+          <div className="pts">{top[i].score.toLocaleString()} points</div>
+          <div className="block gl-on-large" aria-label={places[i] + " place"}>{top[i].rank}</div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -363,7 +428,7 @@ function TeamStandings({ teams, title }: { teams: TeamStanding[]; title: string 
           <li key={t.team}>
             <span>{t.rank}.</span>
             <TeamBadge team={t.team} big />
-            <span className="muted" style={{ color: "inherit", opacity: 0.8, fontSize: 16 }}>{t.members} {t.members === 1 ? "player" : "players"}</span>
+            <span style={{ opacity: 0.8, fontSize: 16 }}>{t.members} {t.members === 1 ? "player" : "players"}</span>
             <span className="spacer" />
             <span>{t.score} <span style={{ fontSize: 14 }}>average</span></span>
           </li>
@@ -373,18 +438,23 @@ function TeamStandings({ teams, title }: { teams: TeamStanding[]; title: string 
   );
 }
 
-function Intro({ intro, serverNow }: { intro: { index: number; total: number; startsAt: number }; serverNow: () => number }) {
+function Intro({ intro, serverNow, grade }: { intro: { index: number; total: number; startsAt: number }; serverNow: () => number; grade: number | null }) {
   const left = useCountdown(intro.startsAt, serverNow);
   return (
-    <div style={{ textAlign: "center", marginTop: 80 }}>
+    <div className="gl-intro gl-in">
       <h2>Question {intro.index + 1} of {intro.total}</h2>
-      <div className="big-number" style={{ fontSize: 120, margin: 30 }}>{left || "…"}</div>
-      <p className="muted">Get ready</p>
+      <div className="n" aria-live="polite">{left || "…"}</div>
+      <p style={{ margin: 0 }}>Get ready</p>
+      <Buddy grade={grade} className="gl-buddy-side" />
     </div>
   );
 }
 
-function Countdown({ closesAt, serverNow }: { closesAt: number; serverNow: () => number }) {
+/** A tick each second for the last five seconds of a question. */
+function Ticks({ closesAt, serverNow, tick }: { closesAt: number; serverNow: () => number; tick: () => void }) {
   const left = useCountdown(closesAt, serverNow);
-  return <div className="big-number" aria-label={left + " seconds left"}>{left}</div>;
+  useEffect(() => {
+    if (left > 0 && left <= 5) tick();
+  }, [left]); // eslint-disable-line react-hooks/exhaustive-deps
+  return null;
 }

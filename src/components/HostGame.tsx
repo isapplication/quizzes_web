@@ -5,16 +5,17 @@ import { useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { isIndependent, useMe } from "@/lib/me";
 import { GAME_MODES } from "@/components/Stage";
+import { lookChoices } from "@/lib/gameLook";
 
 /** One of the workspace's own quizzes, or a library quiz played in place (nothing is copied). */
 export type HostTarget = { quizId: string } | { libraryQuizId: string };
 
 /**
- * "Host a live game": the mode (Classic, Team with 2 to 6 teams, or untimed Accuracy), who can join (a school can limit
- * it to its signed-in students and a class), then the host screen. The same box on a teacher's own quiz and on a
- * library quiz.
+ * "Host a live game": the mode (Classic, Team with 2 to 6 teams, or untimed Accuracy), the game look (the quiz's grade,
+ * or another), who can join (a school can limit it to its signed-in students and a class), then the host screen. The
+ * same box on a teacher's own quiz and on a library quiz.
  */
-export function HostGame({ target, playable, total }: { target: HostTarget; playable: number; total: number }) {
+export function HostGame({ target, playable, total, grade }: { target: HostTarget; playable: number; total: number; grade: number }) {
   const me = useMe();
   const router = useRouter();
   const school = !isIndependent(me);
@@ -22,6 +23,8 @@ export function HostGame({ target, playable, total }: { target: HostTarget; play
   const [classCode, setClassCode] = useState("");
   const [mode, setMode] = useState<"CLASSIC" | "TEAM" | "ACCURACY">("CLASSIC");
   const [teams, setTeams] = useState(2);
+  const looks = lookChoices(grade);
+  const [look, setLook] = useState(looks[0].value);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const skipped = total - playable;
@@ -38,7 +41,7 @@ export function HostGame({ target, playable, total }: { target: HostTarget; play
         method: "POST",
         body: {
           ...target, requireSignIn: signedInOnly, classCode: signedInOnly ? classCode || null : null,
-          mode, teamCount: mode === "TEAM" ? teams : null,
+          mode, teamCount: mode === "TEAM" ? teams : null, lookGrade: look,
         },
       });
       router.push("/teacher/host/" + game.pin);
@@ -75,6 +78,13 @@ export function HostGame({ target, playable, total }: { target: HostTarget; play
           </div>
         )}
       </fieldset>
+      <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+        <label htmlFor="game-look" style={{ fontWeight: 600 }}>Game look</label>
+        <select id="game-look" value={look} onChange={(e) => setLook(Number(e.target.value))} aria-describedby="game-look-hint">
+          {looks.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
+        </select>
+        <span id="game-look-hint" className="muted">The screens&apos; pictures, fonts and motion suit this grade, in your school&apos;s colours.</span>
+      </div>
       {school && (
         <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0, gap: 8 }}>
           <legend style={{ fontWeight: 600, marginBottom: 6 }}>Who can join?</legend>

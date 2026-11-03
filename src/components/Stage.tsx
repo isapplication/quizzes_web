@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { AnswerShape } from "./AnswerShape";
+import { type CSSProperties, useEffect, useState } from "react";
+import type { Band } from "@/lib/gameLook";
+import { AnswerShape, SHAPE_NAMES } from "./AnswerShape";
 
 /** One answer option in the IS answer colours, always with its shape and text (never colour alone). */
 export function AnswerTile({
@@ -50,17 +51,73 @@ export function useCountdown(closesAt: number | null, serverNow: () => number): 
   return left;
 }
 
-export function TimerBar({ openedAt, closesAt, serverNow }: { openedAt: number; closesAt: number; serverNow: () => number }) {
+/**
+ * An answer in a live game, drawn in the game's look (game-looks.css): always its colour, its shape and its text, so
+ * colour is never the only cue. After the question closes it shows how many chose it and marks the right one.
+ */
+export function GameTile({ index, text, onClick, state, count }: {
+  index: number;
+  text: string;
+  onClick?: () => void;
+  state?: "correct" | "dim" | "chosen";
+  count?: number;
+}) {
+  const label = SHAPE_NAMES[index % 4] + ": " + text + (state === "correct" ? ", the right answer" : "")
+    + (count !== undefined ? `, ${count} chose it` : "");
+  return (
+    <button type="button" className={"gl-tile" + (state === "dim" ? " is-dim" : state === "chosen" ? " is-chosen" : "")}
+            data-n={(index % 4) + 1} style={{ "--i": index } as CSSProperties} onClick={onClick} disabled={!onClick}
+            aria-label={label} aria-pressed={onClick ? state === "chosen" : undefined}>
+      <span className="gl-shape"><AnswerShape index={index} color="currentColor" /></span>
+      {text && <span className="gl-tile-text">{text}</span>}
+      {count !== undefined && <span className="gl-count">{count}</span>}
+      {state === "correct" && <span className="gl-mark" aria-hidden="true">✓ Correct</span>}
+    </button>
+  );
+}
+
+/** The question's countdown in the family's style: a ring (K–5), segments (6–8) or a thin line (9–12). */
+export function GameTimer({ band, openedAt, closesAt, serverNow }: {
+  band: Band;
+  openedAt: number;
+  closesAt: number;
+  serverNow: () => number;
+}) {
   const [fraction, setFraction] = useState(1);
+  const left = useCountdown(closesAt, serverNow);
   useEffect(() => {
-    const tick = () => setFraction(Math.max(0, Math.min(1, (closesAt - serverNow()) / (closesAt - openedAt))));
+    const tick = () => setFraction(Math.max(0, Math.min(1, (closesAt - serverNow()) / Math.max(1, closesAt - openedAt))));
     tick();
     const id = setInterval(tick, 100);
     return () => clearInterval(id);
   }, [openedAt, closesAt, serverNow]);
+  const low = fraction < 0.25 ? " low" : "";
+  const a11y = { role: "timer", "aria-label": `${left} ${left === 1 ? "second" : "seconds"} left` };
+  if (band === "m68") {
+    const lit = Math.ceil(fraction * 10);
+    return (
+      <div className={"gl-seg" + low} {...a11y}>
+        {Array.from({ length: 10 }, (_, i) => <i key={i} className={i < lit ? "" : "off"} />)}
+        <span aria-hidden="true">{left}</span>
+      </div>
+    );
+  }
+  if (band === "h912") {
+    return (
+      <div className={"gl-line" + low} {...a11y}>
+        <div className="bar"><div style={{ width: `${fraction * 100}%` }} /></div>
+        <span aria-hidden="true">0:{String(left).padStart(2, "0")}</span>
+      </div>
+    );
+  }
   return (
-    <div className="timer-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(fraction * 100)}>
-      <div style={{ width: `${fraction * 100}%`, background: fraction < 0.25 ? "var(--warning)" : "var(--pc)" }} />
+    <div className={"gl-ring" + low} {...a11y}>
+      <svg viewBox="0 0 36 36" aria-hidden="true">
+        <circle className="track" cx="18" cy="18" r="15.9" fill="none" strokeWidth="3.2" />
+        <circle className="left" cx="18" cy="18" r="15.9" fill="none" strokeWidth="3.2" pathLength={100}
+                strokeDasharray="100" strokeDashoffset={100 - fraction * 100} />
+      </svg>
+      <span aria-hidden="true">{left}</span>
     </div>
   );
 }

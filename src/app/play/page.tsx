@@ -7,7 +7,9 @@ import { PlayerGame } from "@/components/PlayerGame";
 import { api, ApiError } from "@/lib/api";
 import type { ShownBrand } from "@/lib/me";
 import { formatPin, normalizePin } from "@/lib/pin";
-import { OwnerBrandMark } from "@/components/OwnerBrand";
+import { OwnerBrandMark, useOwnerBrand } from "@/components/OwnerBrand";
+import { GameLook } from "@/components/live/GameLook";
+import { Buddy } from "@/components/live/LookArt";
 
 interface Joined {
   gameId: string;
@@ -18,6 +20,7 @@ interface Joined {
   name: string;
   brand: ShownBrand;
   guest: boolean;
+  lookGrade: number | null;
 }
 
 /** What the Quiz API says after the PIN: whose game it is and how this person can join it. */
@@ -29,6 +32,8 @@ interface JoinInfo {
   joinAs: "SIGNED_IN" | "GUEST" | "SIGN_IN_FIRST";
   name: string | null;
   signInUrl: string | null;
+  /** The game's look (0 to 12), so the join page already looks like the game. */
+  lookGrade: number | null;
 }
 
 /** A refreshed tab goes back into its game (the ticket lasts the lesson); one game per tab. */
@@ -74,6 +79,8 @@ function Play() {
   const [joined, setJoined] = useState<Joined | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // The join page takes the hosting school's colours as soon as the PIN is known.
+  useOwnerBrand(info?.brand);
 
   async function lookUp(raw: string) {
     const clean = normalizePin(raw);
@@ -119,70 +126,76 @@ function Play() {
 
   if (joined) {
     return <PlayerGame url={joined.cometdUrl} pin={joined.pin} ticket={joined.ticket} name={joined.name}
-                       quizTitle={joined.quizTitle} brand={joined.brand} />;
+                       quizTitle={joined.quizTitle} brand={joined.brand} lookGrade={joined.lookGrade} />;
   }
 
   return (
-    <div className="stage">
-      <div className="stage-bar">
+    <GameLook grade={info?.lookGrade} kind="player">
+      <header className="gl-bar">
         <OwnerBrandMark brand={info?.brand} />
-        <span className="spacer" />
-        <Link className="btn btn-light" style={{ padding: "4px 12px" }} href="/">Leave</Link>
-      </div>
-      <main className="stage-main" style={{ maxWidth: 480 }}>
-        {!info ? (
-          <form className="pin-box stack" onSubmit={(e) => { e.preventDefault(); lookUp(pin); }}>
-            <label htmlFor="pin" style={{ fontSize: 18 }}>Game PIN</label>
-            <input id="pin" type="text" inputMode="numeric" autoComplete="off" value={pin} autoFocus
-                   onChange={(e) => { setPin(e.target.value.replace(/[^\d ]/g, "")); setError(null); }}
-                   className="code-input" style={{ fontSize: 32, width: "100%" }} placeholder="123 456" maxLength={7} />
-            <button className="btn btn-primary" type="submit" disabled={busy} style={{ fontSize: 20, width: "100%" }}>
-              {busy ? "Looking…" : "Enter"}
-            </button>
-          </form>
-        ) : (
-          <div className="pin-box stack">
-            <div>
-              <p className="muted" style={{ margin: 0 }}>{info.workspaceName} · PIN {formatPin(info.pin)}</p>
-              <h1 style={{ margin: "4px 0 0", fontSize: 24 }}>{info.quizTitle}</h1>
-            </div>
-            {info.joinAs === "SIGNED_IN" && (
-              <>
-                <p style={{ margin: 0 }}>You&apos;re playing as <strong>{info.name}</strong>: your result is saved.</p>
-                <button className="btn btn-primary" type="button" disabled={busy} style={{ fontSize: 20, width: "100%" }}
-                        onClick={join}>
-                  {busy ? "Joining…" : "Join the game"}
-                </button>
-              </>
-            )}
-            {info.joinAs === "GUEST" && (
-              <form className="stack" onSubmit={(e) => { e.preventDefault(); join(); }}>
-                <label htmlFor="nickname" style={{ fontSize: 18 }}>Your nickname</label>
-                <input id="nickname" type="text" autoComplete="nickname" value={nickname} maxLength={20} autoFocus
-                       onChange={(e) => { setNickname(e.target.value); setError(null); }}
-                       style={{ fontSize: 24, textAlign: "center", width: "100%" }} placeholder="e.g. Sam" />
-                <p className="hint" style={{ margin: 0 }}>2 to 20 characters. Everyone in the game sees it.</p>
-                <button className="btn btn-primary" type="submit" disabled={busy || nickname.trim().length < 2}
-                        style={{ fontSize: 20, width: "100%" }}>
-                  {busy ? "Joining…" : "Join the game"}
-                </button>
-              </form>
-            )}
-            {info.joinAs === "SIGN_IN_FIRST" && (
-              <>
-                <div className="alert alert-warning" style={{ margin: 0 }}>
-                  This game is for signed-in students of {info.workspaceName}. Sign in, and you&apos;ll come straight back to it.
+        <span className="gl-spacer" />
+        <Link className="gl-quiet" href="/">Leave</Link>
+      </header>
+      <main className="gl-main">
+        <div className="gl-center gl-in">
+          {!info ? (
+            <>
+              <h1 className="gl-wordmark">Join a game</h1>
+              <form className="gl-form" onSubmit={(e) => { e.preventDefault(); lookUp(pin); }}>
+                <div className="gl-field">
+                  <label htmlFor="pin">Game PIN</label>
+                  <input id="pin" type="text" inputMode="numeric" autoComplete="off" value={pin} autoFocus
+                         onChange={(e) => { setPin(e.target.value.replace(/[^\d ]/g, "")); setError(null); }}
+                         placeholder="123 456" maxLength={7} aria-describedby={error ? "join-error" : undefined} />
                 </div>
-                {info.signInUrl && <a className="btn btn-primary" href={info.signInUrl} style={{ fontSize: 20 }}>Sign in through your school</a>}
-              </>
-            )}
-            <button type="button" className="btn btn-light" onClick={() => { setInfo(null); setError(null); }}>
-              Use another PIN
-            </button>
-          </div>
-        )}
-        {error && <div className="alert alert-danger" role="alert">{error}</div>}
+                <button className="gl-btn gl-btn-big" type="submit" disabled={busy}>{busy ? "Looking…" : "Enter"}</button>
+              </form>
+            </>
+          ) : (
+            <>
+              <Buddy grade={info.lookGrade} />
+              <div>
+                <p className="gl-sub" style={{ margin: 0 }}>{info.workspaceName} · PIN {formatPin(info.pin)}</p>
+                <h1 className="gl-big" style={{ marginTop: 4 }}>{info.quizTitle}</h1>
+              </div>
+              {info.joinAs === "SIGNED_IN" && (
+                <div className="gl-form">
+                  <p style={{ margin: 0 }}>You&apos;re playing as <strong>{info.name}</strong>: your result is saved.</p>
+                  <button className="gl-btn gl-btn-big" type="button" disabled={busy} onClick={join}>
+                    {busy ? "Joining…" : "Join the game"}
+                  </button>
+                </div>
+              )}
+              {info.joinAs === "GUEST" && (
+                <form className="gl-form" onSubmit={(e) => { e.preventDefault(); join(); }}>
+                  <div className="gl-field">
+                    <label htmlFor="nickname">Your nickname</label>
+                    <input id="nickname" type="text" autoComplete="nickname" value={nickname} maxLength={20} autoFocus
+                           onChange={(e) => { setNickname(e.target.value); setError(null); }} placeholder="e.g. Sam"
+                           aria-describedby="nickname-hint" />
+                    <span id="nickname-hint" className="hint">2 to 20 characters. Everyone in the game sees it.</span>
+                  </div>
+                  <button className="gl-btn gl-btn-big" type="submit" disabled={busy || nickname.trim().length < 2}>
+                    {busy ? "Joining…" : "Join the game"}
+                  </button>
+                </form>
+              )}
+              {info.joinAs === "SIGN_IN_FIRST" && (
+                <div className="gl-form">
+                  <div className="gl-alert">
+                    This game is for signed-in students of {info.workspaceName}. Sign in, and you&apos;ll come straight back to it.
+                  </div>
+                  {info.signInUrl && <a className="gl-btn gl-btn-big" href={info.signInUrl}>Sign in through your school</a>}
+                </div>
+              )}
+              <button type="button" className="gl-quiet" onClick={() => { setInfo(null); setError(null); }}>
+                Use another PIN
+              </button>
+            </>
+          )}
+          {error && <div id="join-error" className="gl-alert danger" role="alert">{error}</div>}
+        </div>
       </main>
-    </div>
+    </GameLook>
   );
 }

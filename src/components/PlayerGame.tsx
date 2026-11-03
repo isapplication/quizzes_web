@@ -1,7 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AnswerTile, ordinal, TeamBadge, TimerBar, useCountdown } from "./Stage";
+import { GameTile, GameTimer, ordinal, TeamBadge, useCountdown } from "./Stage";
+import { AnswerShape } from "./AnswerShape";
+import { GameLook } from "@/components/live/GameLook";
+import { Buddy, Confetti } from "@/components/live/LookArt";
+import { lookBand, lookWords } from "@/lib/gameLook";
 import { connectLive, LiveConnection, LiveMessage, LiveStatus } from "@/lib/live";
 import { OwnerBrandMark, useOwnerBrand } from "@/components/OwnerBrand";
 import type { ShownBrand } from "@/lib/me";
@@ -53,7 +57,7 @@ type View = "connecting" | "lobby" | "intro" | "question" | "answered" | "result
  * A student's device in a live game. The question and options come from the server without the key;
  * after the question closes the server says whether the answer was right and how many points it earned.
  */
-export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, compact = false }: {
+export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade = null, compact = false }: {
   url: string;
   pin: string;
   ticket: string;
@@ -61,6 +65,8 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, compact =
   quizTitle?: string;
   /** The hosting school's look (or Quizplayo's): a game follows whoever hosts it. */
   brand?: ShownBrand | null;
+  /** The grade (0 to 12) whose game look this game uses; null shows the default look. */
+  lookGrade?: number | null;
   compact?: boolean;
 }) {
   useOwnerBrand(brand);
@@ -77,6 +83,10 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, compact =
   const [chosen, setChosen] = useState<number | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [final, setFinal] = useState<Final | null>(null);
+  // The right answer of the question that just closed, so a wrong answer can show it.
+  const [correctIndex, setCorrectIndex] = useState<number | null>(null);
+  const band = lookBand(lookGrade);
+  const words = lookWords(band);
   const live = useRef<LiveConnection | null>(null);
   const serverNow = useCallback(() => live.current?.serverNow() ?? Date.now(), []);
 
@@ -107,11 +117,15 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, compact =
         setChosen(null);
         setView("question");
         break;
+      case "closed":
+        setCorrectIndex(Number(m.correctIndex));
+        break;
       case "answerAck":
         if (m.accepted === false && m.message) setMessage(String(m.message));
         break;
       case "result":
         setResult(m as unknown as Result);
+        setMessage(null);
         setScore(Number(m.score));
         setView("result");
         break;
@@ -165,93 +179,115 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, compact =
     setView("answered");
   }
 
+  const shownAnswer = result && !result.correct && question && correctIndex !== null && question.index === result.index
+    ? { index: correctIndex, text: question.choices[correctIndex] } : null;
+
   return (
-    <div className={"stage" + (compact ? " compact" : "")} style={compact ? { minHeight: "100%" } : undefined}>
-      <div className="stage-bar">
+    <GameLook grade={lookGrade} kind={compact ? "compact" : "player"}>
+      <header className="gl-bar">
         {compact ? <span className="brand">{shownName}</span> : <OwnerBrandMark brand={brand} />}
-        <span className="spacer" />
-        {!compact && <span>{shownName}</span>}
+        <span className="gl-spacer" />
+        {!compact && <span className="gl-who">{shownName}</span>}
         {team > 0 && <TeamBadge team={team} />}
-        <span className="status-pill">{score} pts</span>
-        {status === "reconnecting" && <span className="status-pill">Reconnecting…</span>}
+        <span className="gl-pill">{score.toLocaleString()} pts</span>
+        {status === "reconnecting" && <span className="gl-pill" role="status">Reconnecting…</span>}
         {!compact && (
-          <a className="btn btn-light" style={{ padding: "4px 12px" }} href="/home"
+          <a className="gl-quiet" href="/home"
              onClick={(e) => { if (!window.confirm("Leave this game? Your score so far is kept.")) e.preventDefault(); }}>
-            Leave game
+            Leave
           </a>
         )}
-      </div>
-      <main className="stage-main">
-        {message && <div className="alert alert-warning">{message}</div>}
-        {view === "connecting" && <p>Joining game {pin}…</p>}
+      </header>
+      <main className="gl-main">
+        {message && <div className="gl-alert" role="alert">{message}</div>}
+        {view === "connecting" && <div className="gl-center"><p className="gl-sub">Joining game {pin}…</p></div>}
         {view === "lobby" && (
-          <div className="feedback neutral">
-            You&apos;re in, {shownName}!<br />
-            {team > 0 && <div style={{ margin: "10px 0" }}><TeamBadge team={team} big /></div>}
-            <span style={{ fontSize: 16, fontWeight: 400 }}>{title} · Look for your name on the big screen.</span>
+          <div className="gl-center gl-in">
+            <Buddy grade={lookGrade} />
+            <div className="gl-big">You&apos;re in, {shownName}!</div>
+            {team > 0 && <TeamBadge team={team} big />}
+            <div className="gl-sub">{title}<br />Look for your name on the big screen.</div>
           </div>
         )}
         {view === "intro" && intro && <IntroCountdown intro={intro} serverNow={serverNow} />}
         {view === "question" && question && (
           <>
-            {question.timed !== false && <TimerBar openedAt={question.openedAt} closesAt={question.closesAt} serverNow={serverNow} />}
+            <div className="gl-row" style={{ justifyContent: "space-between" }}>
+              <span className="gl-pill">{question.index + 1} of {question.total}</span>
+              {question.timed !== false && <GameTimer band={band} openedAt={question.openedAt} closesAt={question.closesAt} serverNow={serverNow} />}
+            </div>
             {!compact && (
-              <div className="question-text" style={{ fontSize: 22 }}>
-                {question.visual && <span aria-hidden="true">{question.visual} </span>}{question.text}
-              </div>
+              <h1 className="gl-card gl-q">
+                {question.visual && <span className="gl-visual" aria-hidden="true">{question.visual}</span>}{question.text}
+              </h1>
             )}
-            <div className="answer-grid" style={compact ? { gridTemplateColumns: "1fr 1fr", gap: 6 } : undefined}>
-              {question.choices.map((c, i) => (
-                <AnswerTile key={i} index={i} text={compact ? "" : c} onClick={() => answer(i)} />
-              ))}
+            <div className="gl-tiles gl-in">
+              {question.choices.map((c, i) => <GameTile key={i} index={i} text={compact ? "" : c} onClick={() => answer(i)} />)}
             </div>
           </>
         )}
-        {view === "answered" && <div className="feedback neutral">Answer received ✓<br /><span style={{ fontSize: 16, fontWeight: 400 }}>Waiting for the others…</span></div>}
+        {view === "answered" && (
+          <div className="gl-center gl-in">
+            <Buddy grade={lookGrade} />
+            <div className="gl-big">Answer in!</div>
+            <div className="gl-sub">Waiting for the others…</div>
+          </div>
+        )}
         {view === "result" && result && (
-          <div className={"feedback " + (result.correct ? "ok" : "no")}>
-            {result.correct ? "✓ Correct" : result.answered ? "✕ Not quite" : "⏱ Time's up"}
-            {result.correct && (
-              <div style={{ fontSize: 18 }}>
-                +{result.points} points{result.streakBonus > 0 && <> · streak {result.streak} 🔥 +{result.streakBonus}</>}
-              </div>
-            )}
-            <div style={{ fontSize: 16, fontWeight: 400 }}>
-              You are {ordinal(result.rank)} of {result.players} · {result.score} points
+          <div className="gl-center gl-in">
+            <Buddy grade={lookGrade} mood={result.correct ? "happy" : "sad"} />
+            <div className={"gl-card gl-result " + (result.correct ? "ok" : "no")} role="status">
+              <div className="gl-result-icon gl-on-large" aria-hidden="true">{result.correct ? "✓" : result.answered ? "✕" : "⏱"}</div>
+              <div className="gl-big">{result.correct ? words.correct : result.answered ? words.wrong : words.timeUp}</div>
+              {result.correct && (
+                <>
+                  <div className="pts">+{result.points.toLocaleString()} points</div>
+                  {result.streakBonus > 0 && <div>🔥 Streak {result.streak} · +{result.streakBonus} bonus</div>}
+                </>
+              )}
+              {shownAnswer && (
+                <div className="gl-sub">
+                  The answer was{" "}
+                  <span className="gl-answer">
+                    <AnswerShape index={shownAnswer.index} color={`var(--a${(shownAnswer.index % 4) + 1})`} />{shownAnswer.text}
+                  </span>
+                </div>
+              )}
+              <div className="gl-sub">You are {ordinal(result.rank)} of {result.players} · {result.score.toLocaleString()} points</div>
+              {result.team && result.teamRank && (
+                <div className="gl-sub"><TeamBadge team={result.team} /> is {ordinal(result.teamRank)} of {result.teams} teams</div>
+              )}
             </div>
-            {result.team && result.teamRank && (
-              <div style={{ fontSize: 16, fontWeight: 400, marginTop: 6 }}>
-                <TeamBadge team={result.team} /> is {ordinal(result.teamRank)} of {result.teams} teams
-              </div>
-            )}
           </div>
         )}
         {view === "final" && final && (
-          <div className="feedback neutral">
-            {final.rank <= 3 ? "🏆 " : ""}You finished {ordinal(final.rank)} of {final.players}
-            <div style={{ fontSize: 18, fontWeight: 400 }}>
-              {final.score} points · {final.correct} of {final.questions} correct
-            </div>
+          <div className="gl-center gl-in">
+            {final.rank <= 3 && <Confetti band={band} />}
+            <Buddy grade={lookGrade} mood="happy" />
+            <div className="gl-sub">You finished</div>
+            <div className="gl-place">{ordinal(final.rank)}</div>
+            <div className="gl-sub">of {final.players} · {final.score.toLocaleString()} points · {final.correct} of {final.questions} correct</div>
+            {final.rank <= 3 && band !== "h912" && <span className="gl-pill">🏅 On the podium!</span>}
             {final.team && final.teamRank && (
-              <div style={{ fontSize: 18, fontWeight: 400, marginTop: 8 }}>
+              <div className="gl-sub">
                 <TeamBadge team={final.team} /> finished {ordinal(final.teamRank)} of {final.teams} teams{final.teamRank === 1 ? " 🏆" : ""}
               </div>
             )}
           </div>
         )}
-        {view === "out" && !message && <div className="feedback neutral">This game has ended.</div>}
+        {view === "out" && !message && <div className="gl-center"><div className="gl-big">This game has ended.</div></div>}
       </main>
-    </div>
+    </GameLook>
   );
 }
 
 function IntroCountdown({ intro, serverNow }: { intro: { index: number; total: number; startsAt: number }; serverNow: () => number }) {
   const left = useCountdown(intro.startsAt, serverNow);
   return (
-    <div className="feedback neutral">
-      Question {intro.index + 1} of {intro.total}
-      <div className="big-number" style={{ margin: 12 }}>{left || "…"}</div>
-      Get ready
+    <div className="gl-intro gl-in">
+      <h2>Question {intro.index + 1} of {intro.total}</h2>
+      <div className="n" aria-live="polite">{left || "…"}</div>
+      <p style={{ margin: 0 }}>Get ready</p>
     </div>
   );
 }

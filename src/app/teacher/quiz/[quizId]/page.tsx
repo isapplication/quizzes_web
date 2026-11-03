@@ -86,7 +86,7 @@ function Quiz() {
         </div>
       } />
 
-      <HostGame target={{ quizId }} playable={q.playableCount} total={q.questionCount} />
+      <HostGame target={{ quizId }} playable={q.playableCount} total={q.questionCount} grade={q.grade} />
       <AssignBox target={{ quizId }} />
       {error && <div className="alert alert-danger" role="alert">{error}</div>}
 
