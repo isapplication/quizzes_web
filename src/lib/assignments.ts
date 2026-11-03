@@ -59,6 +59,13 @@ export interface PlayQuestion {
   text: string;
   visual: string | null;
   choices: string[];
+  /** PUZZLE: the items to put in order, shuffled. */
+  items: string[];
+  /** MATCH: the left side in order, and the right side shuffled. */
+  left: string[];
+  right: string[];
+  /** CARD: the back of the card. */
+  back: string | null;
 }
 
 export interface PlayState {
@@ -76,11 +83,22 @@ export interface PlayState {
 
 export interface Answered {
   correct: boolean;
+  /** -1 for an activity round. */
   correctIndex: number;
   explanation: string | null;
   points: number;
+  /** Activity rounds: how many of the parts (items, pairs) were right. */
+  right: number;
+  parts: number;
+  /** PUZZLE: the items in the right order; MATCH: the right pairs, [left, right]; otherwise null. */
+  solution: string[] | [string, string][] | null;
   state: PlayState;
 }
+
+/** What a student sends for one activity round. */
+export type ActivityAnswer = { order: number[] } | { matches: number[] } | { knew: boolean };
+
+export const ACTIVITY_TYPES = ["PUZZLE", "MATCH", "CARD"];
 
 /** "Due Tue 4 Nov, 15:00" in the viewer's own time zone, or null. */
 export function dueText(dueAt: string | null): string | null {

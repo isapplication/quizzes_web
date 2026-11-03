@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { ActivityRound } from "@/components/ActivityRound";
 import { AnswerTile } from "@/components/Stage";
 import { OwnerBrandMark, useOwnerBrand } from "@/components/OwnerBrand";
 import { api, ApiError } from "@/lib/api";
-import { Answered, dueText, PlayInfo, PlayState } from "@/lib/assignments";
+import { ACTIVITY_TYPES, ActivityAnswer, Answered, dueText, PlayInfo, PlayState } from "@/lib/assignments";
 import { LoadingState } from "@/components/ui/States";
 
 /** This device's key for the attempt at one assignment, kept so a reload carries on. */
@@ -34,13 +35,16 @@ function saveKey(code: string, key: string | null) {
 /**
  * Doing an assignment from its link, open to everyone: at your own pace, no timer. Signed in at its school you do it as
  * yourself (and carry on from any device); otherwise with a nickname, unless it is for signed-in students only. Each
- * answer is checked on the server, then you see whether it was right before going on.
+ * answer is checked on the server, then you see whether it was right before going on. Activity rounds (put in order,
+ * match the pairs, flashcards) are played by {@link ActivityRound}; a flashcard goes straight on to the next card.
  */
 export default function AssignmentPage() {
   const { code } = useParams<{ code: string }>();
   const [info, setInfo] = useState<PlayInfo | null>(null);
   const [state, setState] = useState<PlayState | null>(null);
-  const [feedback, setFeedback] = useState<(Answered & { chosen: number }) | null>(null);
+  const [feedback, setFeedback] = useState<(Answered & { chosen: number | null }) | null>(null);
+  // The last round's type: the end screen speaks of cards after a set of flashcards.
+  const [lastType, setLastType] = useState<string | null>(null);
   const [nickname, setNickname] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -83,15 +87,18 @@ export default function AssignmentPage() {
     setBusy(false);
   }
 
-  async function answer(choice: number) {
+  async function answer(given: { choice: number } | ActivityAnswer) {
     if (!state?.question || busy || feedback) return;
+    const type = state.question.type;
     setBusy(true);
     setError(null);
     try {
       const r = await api<Answered>("/api/v1/assignments/play/" + code + "/answer", {
-        method: "POST", body: { attemptKey: key, index: state.question.index, choice },
+        method: "POST", body: { attemptKey: key, index: state.question.index, ...given },
       });
-      setFeedback({ ...r, chosen: choice });
+      setLastType(type);
+      if (type === "CARD") setState(r.state);
+      else setFeedback({ ...r, chosen: "choice" in given ? given.choice : null });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Quizplayo could not save your answer. Please try again.");
     }
@@ -105,6 +112,8 @@ export default function AssignmentPage() {
   }
 
   const q = state?.question ?? null;
+  const activity = q !== null && ACTIVITY_TYPES.includes(q.type);
+  const step = q?.type === "CARD" ? "Card" : activity ? "Round" : "Question";
   return (
     <div className="stage">
       <div className="stage-bar">
@@ -157,7 +166,35 @@ export default function AssignmentPage() {
           </div>
         )}
 
-        {state && q && !feedback && (
+        {state && q && activity && (
+          <>
+            <div className="assignment-progress">
+              <span>{step} {q.index + 1} of {q.total}</span>
+              <span>{q.type === "CARD" ? state.correct + " known so far" : state.score + " points so far"}</span>
+            </div>
+            {feedback && (
+              <div className={"feedback assignment-feedback " + (feedback.correct ? "ok" : "no")} role="status">
+                {feedback.correct ? "✓ All right" : "✕ " + feedback.right + " of " + feedback.parts + " right"}
+                {feedback.points > 0 && <div style={{ fontSize: 18 }}>+{feedback.points} points</div>}
+              </div>
+            )}
+            {q.visual && <span className="question-visual-big" aria-hidden="true">{q.visual}</span>}
+            <div className="question-text">{q.text}</div>
+            {q.type !== "CARD" || !feedback ? (
+              <ActivityRound key={q.index} q={q} feedback={feedback} busy={busy} onAnswer={answer} />
+            ) : null}
+            {feedback?.explanation && <div className="card">{feedback.explanation}</div>}
+            {feedback && (
+              <div className="row" style={{ justifyContent: "center" }}>
+                <button type="button" className="btn btn-primary" style={{ fontSize: 20 }} onClick={next} autoFocus>
+                  {feedback.state.finished ? "See how you did" : "Next round"}
+                </button>
+              </div>
+            )}
+          </>
+        )}
+
+        {state && q && !activity && !feedback && (
           <>
             <div className="assignment-progress">
               <span>Question {q.index + 1} of {q.total}</span>
@@ -166,12 +203,12 @@ export default function AssignmentPage() {
             {q.visual && <span className="question-visual-big" aria-hidden="true">{q.visual}</span>}
             <div className="question-text">{q.text}</div>
             <div className="answer-grid">
-              {q.choices.map((c, i) => <AnswerTile key={i} index={i} text={c} onClick={() => answer(i)} />)}
+              {q.choices.map((c, i) => <AnswerTile key={i} index={i} text={c} onClick={() => answer({ choice: i })} />)}
             </div>
           </>
         )}
 
-        {state && q && feedback && (
+        {state && q && !activity && feedback && (
           <>
             <div className={"feedback assignment-feedback " + (feedback.correct ? "ok" : "no")} role="status">
               {feedback.correct ? "✓ Correct" : "✕ Not quite"}
@@ -198,7 +235,9 @@ export default function AssignmentPage() {
           <div className="feedback neutral">
             Done, {state.name}!
             <div style={{ fontSize: 18, fontWeight: 400 }}>
-              {state.correct} of {state.total} right · {state.score} points
+              {lastType === "CARD"
+                ? <>You knew {state.correct} of {state.total} cards. Go back over the others another time.</>
+                : <>{state.correct} of {state.total} right · {state.score} points</>}
             </div>
             <div style={{ fontSize: 16, fontWeight: 400 }}>Your teacher can see your answers.</div>
           </div>

@@ -19,6 +19,26 @@ export interface LibraryCard {
   questionCount: number;
   visual: string | null;
   status: string;
+  /** QUIZ: hosted live or assigned; ACTIVITY: done at each student's own pace, through an assignment only. */
+  kind: "QUIZ" | "ACTIVITY";
+  /** For an activity: MATCH (match the pairs), ORDER (put in order) or CARDS (flashcards); null for a quiz. */
+  format: ActivityFormat | null;
+}
+
+export type ActivityFormat = "MATCH" | "ORDER" | "CARDS";
+
+export const FORMAT_LABEL: Record<ActivityFormat, string> = {
+  MATCH: "Match the pairs",
+  ORDER: "Put in order",
+  CARDS: "Flashcards",
+};
+
+/** "6 rounds" or "8 cards": what an activity is made of. */
+export function partsLabel(card: Pick<LibraryCard, "format" | "questionCount">): string {
+  const n = card.questionCount;
+  if (card.format === "CARDS") return n + (n === 1 ? " card" : " cards");
+  if (card.format) return n + (n === 1 ? " round" : " rounds");
+  return n + (n === 1 ? " question" : " questions");
 }
 
 export interface LibraryCourse {
@@ -33,7 +53,7 @@ export interface LibraryCourse {
 export interface LibraryQuestion {
   questionId: string;
   position: number;
-  type: "QUIZ" | "TRUE_FALSE";
+  type: "QUIZ" | "TRUE_FALSE" | "PUZZLE" | "MATCH" | "CARD";
   text: string;
   timeLimitSeconds: number;
   pointsMultiplier: number;
@@ -42,6 +62,8 @@ export interface LibraryQuestion {
   explanation: string | null;
   visual: string | null;
   benchmarkCode: string | null;
+  /** An activity round's content: MATCH {pairs: [[left, right]]}, PUZZLE {order: [...]}, CARD {back}. */
+  payload: { pairs?: [string, string][]; order?: string[]; back?: string } | null;
 }
 
 export interface LibraryDetail {

@@ -32,6 +32,7 @@ function Library() {
   const subject = params.get("subject") ?? "";
   const course = params.get("course") ?? "";
   const q = params.get("q") ?? "";
+  const kind = params.get("kind") ?? "";
   const [search, setSearch] = useState(q);
   const [courses, setCourses] = useState<LibraryCourse[]>([]);
   const [quizzes, setQuizzes] = useState<LibraryCard[] | null>(null);
@@ -41,7 +42,7 @@ function Library() {
   const [error, setError] = useState<string | null>(null);
 
   function set(next: Record<string, string>) {
-    const all = new URLSearchParams({ grade, subject, course, q, ...next });
+    const all = new URLSearchParams({ grade, subject, course, q, kind, ...next });
     [...all.keys()].forEach((k) => { if (!all.get(k) && k !== "grade") all.delete(k); });
     router.replace("/library?" + all.toString(), { scroll: false });
   }
@@ -61,7 +62,7 @@ function Library() {
       setMore(r.more);
     }).catch((e: unknown) => setError(e instanceof ApiError ? e.message : "Quizplayo could not load the library."));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [grade, subject, course, q]);
+  }, [grade, subject, course, q, kind]);
 
   function query(p: number): string {
     const u = new URLSearchParams();
@@ -69,6 +70,7 @@ function Library() {
     if (subject) u.set("subject", subject);
     if (course) u.set("course", course);
     if (q) u.set("q", q);
+    if (kind) u.set("kind", kind);
     u.set("page", String(p));
     return u.toString();
   }
@@ -81,7 +83,7 @@ function Library() {
       setMore(r.more);
       setPage(page + 1);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Quizplayo could not load more quizzes.");
+      setError(e instanceof ApiError ? e.message : "Quizplayo could not load more of the library.");
     }
     setLoadingMore(false);
   }
@@ -89,13 +91,21 @@ function Library() {
   return (
     <div className="stack">
       <PageHeader title="Library"
-                  description="Ready-made quizzes for every grade, aligned to the Florida standards (FLVS). Host one as it is, or edit your own copy." />
+                  description="Ready-made quizzes and activities for every grade, aligned to the Florida standards (FLVS). Host a quiz as it is or edit your own copy; assign an activity for students to do at their own pace." />
       <form className="library-filters" role="search" onSubmit={(e) => { e.preventDefault(); set({ q: search.trim() }); }}>
         <div className="field">
           <label htmlFor="lib-grade">Grade</label>
           <select id="lib-grade" value={grade} onChange={(e) => set({ grade: e.target.value, course: "" })}>
             <option value="">All grades</option>
             {GRADES.map((g) => <option key={g} value={g}>{gradeLabel(g)}</option>)}
+          </select>
+        </div>
+        <div className="field">
+          <label htmlFor="lib-kind">Show</label>
+          <select id="lib-kind" value={kind} onChange={(e) => set({ kind: e.target.value })}>
+            <option value="">Quizzes and activities</option>
+            <option value="QUIZ">Quizzes</option>
+            <option value="ACTIVITY">Activities</option>
           </select>
         </div>
         <div className="field">
@@ -129,14 +139,14 @@ function Library() {
       {error && <div className="alert alert-danger" role="alert">{error}</div>}
       {!quizzes && !error && <LoadingState rows={4} label="Loading the library" />}
       {quizzes && quizzes.length === 0 && (
-        <EmptyState title="No quizzes match these filters">
+        <EmptyState title={kind === "ACTIVITY" ? "No activities match these filters" : "Nothing matches these filters"}>
           Try another grade or subject, or clear the search.
         </EmptyState>
       )}
       {quizzes && quizzes.length > 0 && (
         <>
           <p className="muted" aria-live="polite" style={{ margin: 0 }}>
-            {quizzes.length}{more ? "+" : ""} {quizzes.length === 1 ? "quiz" : "quizzes"}
+            {quizzes.length}{more ? "+" : ""} {countWord(kind, quizzes.length)}
           </p>
           <div className="library-grid">
             {quizzes.map((c) => <LibraryQuizCard key={c.libraryQuizId} quiz={c} showGrade={grade === ""} />)}
@@ -152,4 +162,10 @@ function Library() {
       )}
     </div>
   );
+}
+
+function countWord(kind: string, n: number): string {
+  if (kind === "ACTIVITY") return n === 1 ? "activity" : "activities";
+  if (kind === "QUIZ") return n === 1 ? "quiz" : "quizzes";
+  return "in the library";
 }

@@ -10,13 +10,15 @@ interface CourseRow {
   grade: number;
   subject: string;
   name: string;
+  /** Quizzes; activities are counted apart. */
   published: number;
+  activities: number;
   hidden: number;
 }
 
 interface RunRow {
   runId: string;
-  kind: "BANK_LOAD" | "SYLLABUS" | "QUIZZES" | "RECHECK";
+  kind: "BANK_LOAD" | "SYLLABUS" | "QUIZZES" | "ACTIVITIES" | "RECHECK";
   mode: "LIVE" | "SAMPLE" | "NONE";
   status: string;
   phase: string | null;
@@ -77,7 +79,7 @@ interface ReportRow {
   lastAt: string;
 }
 
-type Kind = "SYLLABUS" | "QUIZZES" | "RECHECK";
+type Kind = "SYLLABUS" | "QUIZZES" | "ACTIVITIES" | "RECHECK";
 
 /** What is about to start, waiting for "Start" after its estimate. */
 interface Pending {
@@ -94,7 +96,7 @@ const REASON_WORDS: Record<string, string> = {
 };
 
 const RUN_WORDS: Record<string, string> = {
-  BANK_LOAD: "Question bank loaded", SYLLABUS: "Syllabus map", QUIZZES: "Quizzes", RECHECK: "Bank re-check",
+  BANK_LOAD: "Question bank loaded", SYLLABUS: "Syllabus map", QUIZZES: "Quizzes", ACTIVITIES: "Activities", RECHECK: "Bank re-check",
 };
 
 function message(e: unknown): string {
@@ -244,6 +246,8 @@ export function LibraryConsole({ onError, onNotice }: { onError: (m: string | nu
                       onClick={() => prepare("SYLLABUS", null, "Syllabus maps for every course")}>Make every syllabus map</button>
               <button type="button" className="btn btn-light" disabled={busy !== null}
                       onClick={() => prepare("QUIZZES", null, "Quizzes for every course with a map")}>Fill every course</button>
+              <button type="button" className="btn btn-light" disabled={busy !== null}
+                      onClick={() => prepare("ACTIVITIES", null, "Activities for every course with a map")}>Fill every course with activities</button>
               {!sample && (
                 <button type="button" className="btn btn-light" disabled={busy !== null}
                         onClick={() => prepare("RECHECK", null, "Re-check the bank's quizzes")}>Re-check the bank</button>
@@ -256,9 +260,9 @@ export function LibraryConsole({ onError, onNotice }: { onError: (m: string | nu
                 onSubmit={(e) => { e.preventDefault(); start(); }}>
             <h3 id="lib-start" style={{ margin: 0 }}>{pending.label}</h3>
             <div className="row" style={{ gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
-              {pending.kind === "QUIZZES" && (
+              {(pending.kind === "QUIZZES" || pending.kind === "ACTIVITIES") && (
                 <div className="field">
-                  <label htmlFor="lib-target">Quizzes per course</label>
+                  <label htmlFor="lib-target">{pending.kind === "ACTIVITIES" ? "Activities per course" : "Quizzes per course"}</label>
                   <input id="lib-target" type="number" min={1} max={100} value={pending.target}
                          onChange={(e) => setPending({ ...pending, target: Number(e.target.value), estimate: null })}
                          onBlur={() => estimate(pending)} />
@@ -273,7 +277,7 @@ export function LibraryConsole({ onError, onNotice }: { onError: (m: string | nu
             <p style={{ margin: 0 }} aria-live="polite">
               {pending.estimate
                 ? <>Estimate: <strong>{money(pending.estimate.usd)}</strong>
-                  {pending.kind !== "SYLLABUS" && <> for {pending.estimate.quizzes} quizzes</>}
+                  {pending.kind !== "SYLLABUS" && <> for {pending.estimate.quizzes} {pending.kind === "ACTIVITIES" ? "activities" : "quizzes"}</>}
                   {pending.estimate.mode === "SAMPLE" && " (pretend cost: the stand-in spends nothing)"}.</>
                 : "Working out the estimate…"}
             </p>
@@ -294,7 +298,7 @@ export function LibraryConsole({ onError, onNotice }: { onError: (m: string | nu
           <div className="table-scroll" tabIndex={0} role="region" aria-labelledby="lib-runs-caption">
             <table className="sticky-head">
               <caption id="lib-runs-caption" className="sr-only">Library runs, newest first</caption>
-              <thead><tr><th>When</th><th>What</th><th>Status</th><th>Quizzes</th><th>Cost</th><th /></tr></thead>
+              <thead><tr><th>When</th><th>What</th><th>Status</th><th>Made</th><th>Cost</th><th /></tr></thead>
               <tbody>
                 {overview.runs.map((r) => {
                   const open = r.status === "QUEUED" || r.status === "RUNNING";
@@ -309,11 +313,11 @@ export function LibraryConsole({ onError, onNotice }: { onError: (m: string | nu
                         {r.status.toLowerCase()}{open && r.phase && <span className="muted"> · {r.phase === "DRAFT" ? "drafting" : "checking"}</span>}
                         {r.error && <div className="muted">{r.error}</div>}
                       </td>
-                      <td>{r.kind === "QUIZZES" || r.kind === "BANK_LOAD" || r.kind === "RECHECK" ? <>{r.published}{r.requested > 0 && <> of {r.requested}</>}</> : r.kind === "SYLLABUS" ? <>{r.published} units</> : ""}</td>
+                      <td>{r.kind === "QUIZZES" || r.kind === "ACTIVITIES" || r.kind === "BANK_LOAD" || r.kind === "RECHECK" ? <>{r.published}{r.requested > 0 && <> of {r.requested}</>}</> : r.kind === "SYLLABUS" ? <>{r.published} units</> : ""}</td>
                       <td>{money(r.costUsd)}{r.budgetUsd != null && <span className="muted"> of {money(r.budgetUsd)}</span>}</td>
                       <td>
                         <div className="row" style={{ gap: 6, flexWrap: "nowrap" }}>
-                          {(r.kind === "QUIZZES" || r.kind === "RECHECK") && (
+                          {(r.kind === "QUIZZES" || r.kind === "ACTIVITIES" || r.kind === "RECHECK") && (
                             <button type="button" className="btn btn-light" aria-expanded={openRun === r.runId}
                                     onClick={() => setOpenRun(openRun === r.runId ? null : r.runId)}>Details</button>
                           )}
@@ -366,7 +370,7 @@ export function LibraryConsole({ onError, onNotice }: { onError: (m: string | nu
         <div className="table-scroll" tabIndex={0} role="region" aria-labelledby="lib-courses-caption">
           <table className="sticky-head">
             <caption id="lib-courses-caption" className="sr-only">Library courses by grade</caption>
-            <thead><tr><th>Grade</th><th>Course</th><th>Subject</th><th>Published</th><th>Hidden</th><th /></tr></thead>
+            <thead><tr><th>Grade</th><th>Course</th><th>Subject</th><th>Quizzes</th><th>Activities</th><th>Hidden</th><th /></tr></thead>
             <tbody>
               {overview.courses.map((c) => (
                 <Fragment key={c.courseId}>
@@ -375,6 +379,7 @@ export function LibraryConsole({ onError, onNotice }: { onError: (m: string | nu
                   <td>{c.name}</td>
                   <td>{c.subject}</td>
                   <td>{c.published}</td>
+                  <td>{c.activities}</td>
                   <td>{c.hidden || ""}</td>
                   <td>
                     <div className="row" style={{ gap: 6, flexWrap: "nowrap" }}>
@@ -390,7 +395,11 @@ export function LibraryConsole({ onError, onNotice }: { onError: (m: string | nu
                           </button>
                           <button type="button" className="btn btn-light" disabled={busy !== null}
                                   onClick={() => prepare("QUIZZES", c.courseId, "Quizzes: " + gradeLabel(c.grade) + " · " + c.name)}>
-                            Generate<span className="sr-only"> quizzes for {c.name}</span>
+                            Quizzes<span className="sr-only"> for {c.name}</span>
+                          </button>
+                          <button type="button" className="btn btn-light" disabled={busy !== null}
+                                  onClick={() => prepare("ACTIVITIES", c.courseId, "Activities: " + gradeLabel(c.grade) + " · " + c.name)}>
+                            Activities<span className="sr-only"> for {c.name}</span>
                           </button>
                         </>
                       )}
@@ -399,7 +408,7 @@ export function LibraryConsole({ onError, onNotice }: { onError: (m: string | nu
                 </tr>
                 {openCourse === c.courseId && (
                   <tr>
-                    <td colSpan={6}><CourseMap courseId={c.courseId} onError={onError} /></td>
+                    <td colSpan={7}><CourseMap courseId={c.courseId} onError={onError} /></td>
                   </tr>
                 )}
                 </Fragment>

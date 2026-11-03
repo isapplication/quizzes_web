@@ -5,11 +5,12 @@ import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { gradeLabel } from "@/lib/content";
-import { LibraryCard, originLabel, REPORT_REASONS } from "@/lib/library";
+import { FORMAT_LABEL, LibraryCard, originLabel, partsLabel, REPORT_REASONS } from "@/lib/library";
 
 /**
  * One library quiz as a card: the title links to its preview (the whole card is clickable), and Host and "Edit a copy"
- * are their own buttons. Hosting plays the library quiz in place; "Edit a copy" makes the teacher's own draft.
+ * are their own buttons. Hosting plays the library quiz in place; "Edit a copy" makes the teacher's own draft. An
+ * activity can't be hosted or edited: its card leads to its preview, where it is assigned.
  */
 export function LibraryQuizCard({ quiz, showGrade = false }: { quiz: LibraryCard; showGrade?: boolean }) {
   const router = useRouter();
@@ -43,7 +44,7 @@ export function LibraryQuizCard({ quiz, showGrade = false }: { quiz: LibraryCard
   return (
     <article className="library-card">
       <header>
-        <span className="library-card-visual" aria-hidden="true">{quiz.visual ?? "📘"}</span>
+        <span className="library-card-visual" aria-hidden="true">{quiz.visual || (quiz.format ? FORMAT_ICON[quiz.format] : "📘")}</span>
         <h3><Link className="card-link" href={"/library/" + quiz.libraryQuizId}>{quiz.title}</Link></h3>
       </header>
       <p className="muted">
@@ -51,9 +52,16 @@ export function LibraryQuizCard({ quiz, showGrade = false }: { quiz: LibraryCard
         {quiz.courseName}
         {quiz.unit && <> · {quiz.unit}</>}
         <br />
-        {quiz.questionCount} questions · <span className="chip chip-ai">{originLabel(quiz.origin)}</span>
+        {quiz.format && <><span className="chip chip-activity">{FORMAT_LABEL[quiz.format]}</span> · </>}
+        {partsLabel(quiz)} · <span className="chip chip-ai">{originLabel(quiz.origin)}</span>
       </p>
-      <footer>
+      {quiz.kind === "ACTIVITY" ? (
+        <footer>
+          <Link className="btn btn-primary" href={"/library/" + quiz.libraryQuizId + "#assign"}>
+            Assign<span className="sr-only"> {quiz.title}</span>
+          </Link>
+        </footer>
+      ) : <footer>
         <button type="button" className="btn btn-primary" onClick={host} disabled={busy !== null}>
           {busy === "host" ? "Starting…" : "Host"}<span className="sr-only"> {quiz.title}</span>
         </button>
@@ -61,10 +69,12 @@ export function LibraryQuizCard({ quiz, showGrade = false }: { quiz: LibraryCard
           {busy === "copy" ? "Copying…" : "Edit a copy"}<span className="sr-only"> of {quiz.title}</span>
         </button>
         {error && <p className="library-card-error" role="alert">{error}</p>}
-      </footer>
+      </footer>}
     </article>
   );
 }
+
+const FORMAT_ICON = { MATCH: "🧩", ORDER: "🔢", CARDS: "🗂️" } as const;
 
 /**
  * "Report a mistake" on one library question: a native modal dialog with the reason and an optional note. The
