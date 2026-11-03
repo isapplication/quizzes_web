@@ -47,6 +47,8 @@ export interface Me {
   signedInWith: string;
   /** Their Quizplayo account (teachers and admins); null for students and school-portal sign-ins. */
   account: { email: string; verified: boolean; workspaces: number } | null;
+  /** The server sends emails. False: they are only stored (Communication), so screens never say "we emailed". */
+  mailOn: boolean;
 }
 
 export function isIndependent(me: Me): boolean {

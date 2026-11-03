@@ -10,6 +10,10 @@ import { tokenFromHash } from "@/lib/school";
  * The link in the "confirm your email" email: /verify-email#token=…. The token is after '#', so it never reaches a
  * server log; the page sends it in the body of a POST.
  */
+// One request per token: a token works once, so a second run of the effect (React runs it twice in development, and
+// again when the page is reached from Communication) must share the first answer, not report the used link.
+const confirming = new Map<string, Promise<unknown>>();
+
 export default function VerifyEmail() {
   const [state, setState] = useState<"working" | "done" | "failed">("working");
   const [message, setMessage] = useState("");
@@ -21,7 +25,12 @@ export default function VerifyEmail() {
       setMessage("This link is incomplete. Open the link from the email again, or copy the whole address.");
       return;
     }
-    api("/api/v1/auth/verify-email", { method: "POST", body: { token } })
+    let request = confirming.get(token);
+    if (!request) {
+      request = api("/api/v1/auth/verify-email", { method: "POST", body: { token } });
+      confirming.set(token, request);
+    }
+    request
       .then(() => setState("done"))
       .catch((e: unknown) => {
         setState("failed");

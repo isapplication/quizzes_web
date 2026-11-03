@@ -46,7 +46,7 @@ export default function PlatformSignIn() {
       <div className="card stack auth-card">
         <div>
           <h1 style={{ margin: 0 }}>Platform console</h1>
-          <p className="muted" style={{ margin: "6px 0 0" }}>For the Quizplayo platform team. Two steps: your password, then a code we email you.</p>
+          <p className="muted" style={{ margin: "6px 0 0" }}>For the Quizplayo platform team. Two steps: your password, then a 6-digit code.</p>
         </div>
         {step === "password" ? (
           <form className="stack" onSubmit={(e) => { e.preventDefault(); checkPassword(); }}>
@@ -67,7 +67,7 @@ export default function PlatformSignIn() {
           <form className="stack" onSubmit={(e) => { e.preventDefault(); verify(); }}>
             {notice && <div className="alert">{notice}</div>}
             <div className="field">
-              <label htmlFor="ps-code">6-digit code sent to {email}</label>
+              <label htmlFor="ps-code">6-digit code for {email}</label>
               <input id="ps-code" type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={7} required
                      value={code} onChange={(e) => setCode(e.target.value.replace(/[^\d ]/g, ""))} className="code-input"
                      placeholder="123456" autoFocus />

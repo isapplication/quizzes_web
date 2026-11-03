@@ -816,3 +816,26 @@ input[type=email], input[type=tel], input[type=password], input[type=search] {
 .round-answer.pairs li { display: flex; flex-wrap: wrap; gap: 6px 10px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; }
 .round-answer.pairs li > span:first-child { font-weight: 600; }
 .round-answer.card-back { padding: 0; }
+
+/* ---- Communication: the unread count, the inbox, and the console's Emails tab ---- */
+.unread-dot { inline-size: 10px; block-size: 10px; border-radius: 50%; background: var(--pc); box-shadow: 0 0 0 2px var(--on-dark); }
+.user-menu-panel a.menu-with-count { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.count-badge { min-inline-size: 22px; padding: 1px 7px; border-radius: 999px; background: var(--pc); color: var(--on-dark); font-size: 12px; font-weight: 700; text-align: center; }
+.inbox { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.inbox > li { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); }
+.inbox > li.unread { border-inline-start: 4px solid var(--pc); }
+.inbox summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 12px 14px; cursor: pointer; color: var(--ink); font-weight: 400; }
+.inbox summary .subject { font-weight: 600; overflow-wrap: anywhere; }
+.inbox li.unread summary .subject { font-weight: 800; }
+.inbox summary .when { color: var(--muted); font-size: 13px; white-space: nowrap; }
+.inbox summary .meta { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; color: var(--muted); font-size: 13px; }
+.inbox .message { padding: 0 14px 14px; display: grid; gap: 10px; }
+.email-text { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; padding: 12px; background: var(--page); border-radius: 8px; font: inherit; font-size: 15px; line-height: 1.5; }
+.email-dialog { inline-size: min(680px, calc(100vw - 32px)); max-block-size: calc(100dvh - 48px); border: 1px solid var(--border); border-radius: 12px; padding: 20px; background: var(--card); color: var(--ink); }
+.email-dialog::backdrop { background: rgba(0, 27, 71, 0.45); }
+.email-dialog dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 12px; margin: 0; font-size: 14px; }
+.email-dialog dt { color: var(--muted); }
+.email-dialog dd { margin: 0; overflow-wrap: anywhere; }
+.email-stats { display: flex; flex-wrap: wrap; gap: 8px; }
+.email-stats .stat { padding: 8px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); }
+.email-stats .stat strong { display: block; font-size: 22px; }

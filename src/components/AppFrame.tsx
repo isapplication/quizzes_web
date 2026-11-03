@@ -26,13 +26,28 @@ const ROLE_WORDS: Record<string, string> = {
   STUDENT: "Student", TEACHER: "Teacher", SCHOOL_ADMIN: "School admin", CONTENT_REVIEWER: "Content reviewer", PARENT: "Parent",
 };
 
+/** Fired when Communication's unread count may have changed (a message was read). */
+export const COMMUNICATION_CHANGED = "quizplayo:communication-changed";
+
 function TopBar() {
   const me = useMe();
   const staff = isStaff(me);
   const school = !isIndependent(me);
   const [menu, setMenu] = useState(false);
   const [userMenu, setUserMenu] = useState(false);
+  const [unread, setUnread] = useState(0);
   const box = useRef<HTMLDivElement>(null);
+
+  // Communication's unread count: on load, when the menu opens, and when the Communication page reads one.
+  useEffect(() => {
+    const load = () => api<{ unread: number }>("/api/v1/communication/unread").then((r) => setUnread(r.unread)).catch(() => undefined);
+    load();
+    window.addEventListener(COMMUNICATION_CHANGED, load);
+    return () => window.removeEventListener(COMMUNICATION_CHANGED, load);
+  }, []);
+  useEffect(() => {
+    if (userMenu) window.dispatchEvent(new Event(COMMUNICATION_CHANGED));
+  }, [userMenu]);
 
   useEffect(() => {
     if (!userMenu) return;
@@ -75,6 +90,7 @@ function TopBar() {
                   onClick={() => setUserMenu((u) => !u)}>
             <span className="user-avatar" aria-hidden="true">{initials(me.name)}</span>
             <span className="user-name">{me.name}</span>
+            {unread > 0 && <span className="unread-dot"><span className="sr-only">, {unread} unread in Communication</span></span>}
             <span aria-hidden="true">▾</span>
           </button>
           {userMenu && (
@@ -85,6 +101,10 @@ function TopBar() {
               </div>
               {me.account && <Workspaces onDone={() => setUserMenu(false)} />}
               <Link role="menuitem" href="/home" onClick={() => setUserMenu(false)}>Home</Link>
+              <Link role="menuitem" href="/communication" onClick={() => setUserMenu(false)} className="menu-with-count">
+                <span>Communication</span>
+                {unread > 0 && <span className="count-badge">{unread}<span className="sr-only"> unread</span></span>}
+              </Link>
               {me.schoolSystemUrl && <a role="menuitem" href={me.schoolSystemUrl}>Back to your school&apos;s system</a>}
               {(me.account || me.signedInWith === "PASSWORD") && (
                 <Link role="menuitem" href="/account/password" onClick={() => setUserMenu(false)}>Change password</Link>
@@ -187,8 +207,10 @@ function ConfirmEmailBanner() {
 
   return (
     <div className="confirm-banner" role="status">
-      <span>{sent ?? <>Please confirm your email: we sent a link to <strong>{me.account.email}</strong>.</>}</span>
-      {!sent && <button type="button" className="btn btn-light" disabled={busy} onClick={resend}>Send the email again</button>}
+      <span>{sent ?? (me.mailOn
+        ? <>Please confirm your email: we sent a link to <strong>{me.account.email}</strong>.</>
+        : <>Please confirm your email. Emails are switched off on this server, so your link is in <Link href="/communication">Communication</Link>.</>)}</span>
+      {!sent && me.mailOn && <button type="button" className="btn btn-light" disabled={busy} onClick={resend}>Send the email again</button>}
     </div>
   );
 }

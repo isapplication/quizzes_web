@@ -96,7 +96,7 @@ export default function SignIn() {
               <label htmlFor="in-code-email">Email</label>
               <input id="in-code-email" type="email" autoComplete="email" required value={email}
                      onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" />
-              <p className="hint">We email you a 6-digit code that works for 10 minutes.</p>
+              <p className="hint">You get a 6-digit code that works for 10 minutes.</p>
             </div>
             <button className="btn btn-primary" type="submit" disabled={busy || !email.trim()}>
               {busy ? "Sending…" : "Email me a code"}
@@ -111,7 +111,7 @@ export default function SignIn() {
           <form className="stack" onSubmit={(e) => { e.preventDefault(); verify(); }}>
             {notice && <div className="alert">{notice}</div>}
             <div className="field">
-              <label htmlFor="in-code">6-digit code sent to {email}</label>
+              <label htmlFor="in-code">6-digit code for {email}</label>
               <input id="in-code" type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={7} required
                      value={code} onChange={(e) => setCode(e.target.value.replace(/[^\d ]/g, ""))} placeholder="123456"
                      className="code-input" autoFocus />

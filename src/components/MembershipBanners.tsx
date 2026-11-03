@@ -51,7 +51,7 @@ export function JoinSchools({ inSchools = false }: { inSchools?: boolean }) {
   if (error) return <div className="alert alert-danger" role="alert">{error}</div>;
   if (!data) return <p className="muted" style={{ margin: 0 }}>Looking for your school…</p>;
   if (!data.verified) {
-    return <div className="alert">Confirm your email first (use the link we sent you). Then schools that use your email&apos;s domain show here.</div>;
+    return <div className="alert">Confirm your email first (use the link we sent you; it&apos;s also in <a href="/communication">Communication</a>). Then schools that use your email&apos;s domain show here.</div>;
   }
   if (data.schools.length === 0) {
     return (
@@ -225,7 +225,7 @@ export function LinkAccountOffer() {
             </div>
           ) : (
             <div className="field">
-              <label htmlFor="link-code">The 6-digit code we emailed you</label>
+              <label htmlFor="link-code">The 6-digit code</label>
               <input id="link-code" type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} required
                      value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} />
             </div>

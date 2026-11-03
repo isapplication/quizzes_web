@@ -213,6 +213,7 @@ function People() {
 
 /** One person by hand. A student's first password comes back once, to print or read out. */
 function AddPerson({ onAdded }: { onAdded: (login: Login | null) => void }) {
+  const me = useMe();
   const [role, setRole] = useState<Role>("STUDENT");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -240,7 +241,9 @@ function AddPerson({ onAdded }: { onAdded: (login: Login | null) => void }) {
         },
       });
       onAdded(r.firstPassword ? { name: r.person.name, username: r.person.username ?? "", password: r.firstPassword } : null);
-      setNotice(student ? `${r.person.name} was added.` : `${r.person.name} was added and emailed an invitation to join.`);
+      setNotice(student ? `${r.person.name} was added.` : me.mailOn
+        ? `${r.person.name} was added and emailed an invitation to join.`
+        : `${r.person.name} was added. Emails are switched off on this server, so use "Copy a new link" under Invitations and share it with them yourself.`);
       setName(""); setEmail(""); setUsername(""); setClasses("");
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Quizplayo could not add this person.");
@@ -428,11 +431,16 @@ function download(name: string, text: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-/** Staff who haven't accepted their invitation yet: send it again (a new link) or withdraw it. */
+/**
+ * Staff who haven't accepted their invitation yet: send it again (a new link), copy a new link to share yourself, or
+ * withdraw it. Addresses are masked: only the Quizplayo team sees another person's full address.
+ */
 function Invitations({ changed, onChanged }: { changed: number; onChanged: () => void }) {
   const [list, setList] = useState<Invitation[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [shared, setShared] = useState<{ name: string; link: string } | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     api<Invitation[]>("/api/v1/admin/invitations").then(setList)
@@ -443,9 +451,25 @@ function Invitations({ changed, onChanged }: { changed: number; onChanged: () =>
     if (action === "revoke" && !window.confirm(`Withdraw ${i.name}'s invitation? The link in their email stops working.`)) return;
     setError(null);
     setNotice(null);
+    setShared(null);
     try {
-      await api(`/api/v1/admin/invitations/${i.id}/${action}`, { method: "POST" });
-      setNotice(action === "resend" ? `Sent again to ${i.email}, with a new link.` : `${i.name}'s invitation was withdrawn.`);
+      const r = await api<{ message?: string } | undefined>(`/api/v1/admin/invitations/${i.id}/${action}`, { method: "POST" });
+      setNotice(action === "resend" ? `${i.name}: ${r?.message ?? "sent again, with a new link."}` : `${i.name}'s invitation was withdrawn.`);
+      onChanged();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Quizplayo could not do that. Please try again.");
+    }
+  }
+
+  async function newLink(i: Invitation) {
+    if (!window.confirm(`Make a new link for ${i.name}? Any link sent before stops working.`)) return;
+    setError(null);
+    setNotice(null);
+    setCopied(false);
+    try {
+      const r = await api<{ link: string; message: string }>(`/api/v1/admin/invitations/${i.id}/link`, { method: "POST" });
+      setShared({ name: i.name, link: r.link });
+      setNotice(r.message);
       onChanged();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Quizplayo could not do that. Please try again.");
@@ -457,7 +481,21 @@ function Invitations({ changed, onChanged }: { changed: number; onChanged: () =>
     <section className="card stack" aria-labelledby="invitations">
       <h2 id="invitations" style={{ margin: 0 }}>Invitations not accepted yet</h2>
       {error && <div className="alert alert-danger" role="alert">{error}</div>}
-      {notice && <div className="alert alert-success">{notice}</div>}
+      {notice && <div className="alert alert-success" role="status">{notice}</div>}
+      {shared && (
+        <div className="field">
+          <label htmlFor="invite-link">Invitation link for {shared.name}</label>
+          <div className="row" style={{ gap: 8 }}>
+            <input id="invite-link" type="text" readOnly value={shared.link} onFocus={(e) => e.currentTarget.select()} />
+            <button type="button" className="btn btn-primary" onClick={async () => {
+              try { await navigator.clipboard.writeText(shared.link); setCopied(true); } catch { setCopied(false); }
+            }}>{copied ? "Copied" : "Copy"}</button>
+          </div>
+          <p className="hint" aria-live="polite" style={{ margin: 0 }}>
+            {copied ? "Copied. Send it to them by chat or email." : "Send it only to them: whoever opens it can join as them."}
+          </p>
+        </div>
+      )}
       {list.length > 0 && (
         <div className="table-scroll">
           <table>
@@ -474,6 +512,7 @@ function Invitations({ changed, onChanged }: { changed: number; onChanged: () =>
                   </td>
                   <td className="row" style={{ justifyContent: "flex-end", flexWrap: "wrap" }}>
                     <button type="button" className="btn btn-light" onClick={() => act(i, "resend")}>Send again</button>
+                    <button type="button" className="btn btn-light" onClick={() => newLink(i)}>Copy a new link</button>
                     <button type="button" className="btn btn-light" onClick={() => act(i, "revoke")}>Withdraw</button>
                   </td>
                 </tr>
@@ -488,6 +527,7 @@ function Invitations({ changed, onChanged }: { changed: number; onChanged: () =>
 
 /** Teachers on the school's email domain who asked to join: accept (as a teacher or admin) or decline. */
 function JoinRequests({ changed, onDecided }: { changed: number; onDecided: () => void }) {
+  const me = useMe();
   const [list, setList] = useState<JoinRequest[] | null>(null);
   const [roles, setRoles] = useState<Record<string, Role>>({});
   const [error, setError] = useState<string | null>(null);
@@ -505,7 +545,9 @@ function JoinRequests({ changed, onDecided }: { changed: number; onDecided: () =
       await api(`/api/v1/admin/join-requests/${r.id}/${approve ? "approve" : "decline"}`, {
         method: "POST", body: approve ? { role: roles[r.id] ?? "TEACHER" } : undefined,
       });
-      setNotice(approve ? `${r.name} joined your school and was emailed.` : `${r.name}'s request was declined.`);
+      setNotice(approve
+        ? (me.mailOn ? `${r.name} joined your school and was emailed.` : `${r.name} joined your school. They'll see it in Communication when they sign in.`)
+        : `${r.name}'s request was declined.`);
       onDecided();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Quizplayo could not do that. Please try again.");
