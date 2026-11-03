@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { AppFrame } from "@/components/AppFrame";
 import { AnswerShape } from "@/components/AnswerShape";
+import { AssignBox } from "@/components/AssignBox";
 import { HostGame } from "@/components/HostGame";
 import { ReportMistake } from "@/components/LibraryCards";
 import { api, ApiError } from "@/lib/api";
@@ -82,6 +83,7 @@ function LibraryQuiz() {
       {error && <div className="alert alert-danger" role="alert">{error}</div>}
 
       <HostGame target={{ libraryQuizId: q.libraryQuizId }} playable={detail.questions.length} total={detail.questions.length} />
+      <AssignBox target={{ libraryQuizId: q.libraryQuizId }} />
 
       <ol className="question-list">
         {detail.questions.map((question, n) => (

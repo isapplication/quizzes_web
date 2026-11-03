@@ -148,7 +148,7 @@ function Play() {
             </div>
             {info.joinAs === "SIGNED_IN" && (
               <>
-                <p style={{ margin: 0 }}>You&apos;re playing as <strong>{info.name}</strong>. Your result is saved.</p>
+                <p style={{ margin: 0 }}>You&apos;re playing as <strong>{info.name}</strong>: your result is saved.</p>
                 <button className="btn btn-primary" type="button" disabled={busy} style={{ fontSize: 20, width: "100%" }}
                         onClick={join}>
                   {busy ? "Joining…" : "Join the game"}

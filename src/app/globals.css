@@ -774,3 +774,12 @@ input[type=email], input[type=tel], input[type=password], input[type=search] {
 .question-visual-big { font-size: 64px; line-height: 1; display: block; text-align: center; margin-bottom: 8px; }
 /* On the dark classroom and phone screens a team whose colour is the school's dark colour still shows its pill. */
 .stage .team-badge { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9); }
+
+/* ---- Assignments ---- */
+/* A button that reads as a link inside a sentence. */
+.btn-inline { background: none; border: 0; padding: 0; font: inherit; color: var(--pc); text-decoration: underline; cursor: pointer; }
+.assignment-progress { display: flex; justify-content: space-between; gap: 8px; font-size: 16px; }
+.assignment-feedback { text-align: center; }
+.assignment-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.assignment-list li { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between;
+  padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); }

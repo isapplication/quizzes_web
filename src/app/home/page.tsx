@@ -9,6 +9,7 @@ import { StarterShelf } from "@/components/StarterShelf";
 import { normalizePin } from "@/lib/pin";
 import { api, ApiError } from "@/lib/api";
 import { gradeLabel, QuizSummary } from "@/lib/content";
+import { AssignmentSummary, dueText, MyAssignment } from "@/lib/assignments";
 import { isIndependent, isSchoolAdmin, isStaff, useMe } from "@/lib/me";
 import { GRADES } from "@/lib/school";
 import { EmptyState, LoadingState, PageHeader } from "@/components/ui/States";
@@ -46,10 +47,11 @@ function PlatformHome() {
 
 // ---------------------------------------------------------------- teachers and admins
 
-type Tab = "quizzes" | "games" | "activity";
+type Tab = "quizzes" | "games" | "assignments" | "activity";
 const TABS: { id: Tab; label: string }[] = [
   { id: "quizzes", label: "My quizzes" },
   { id: "games", label: "Games" },
+  { id: "assignments", label: "Assignments" },
   { id: "activity", label: "Activity" },
 ];
 
@@ -95,6 +97,7 @@ function TeacherHome() {
       </div>
       {tab === "quizzes" && <MyQuizzes />}
       {tab === "games" && <Games />}
+      {tab === "assignments" && <TeacherAssignments />}
       {tab === "activity" && <ActivityFeed />}
       {me.devTools && (
         <p className="muted">Development: <Link href="/dev/class-simulator">class simulator</Link></p>
@@ -448,6 +451,78 @@ interface MyResult {
   questions: number;
 }
 
+/** The teacher's assignments: link, class, due time, how many started and finished, and the results. */
+function TeacherAssignments() {
+  const [list, setList] = useState<AssignmentSummary[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    api<AssignmentSummary[]>("/api/v1/assignments/mine").then(setList)
+      .catch((e: unknown) => setError(e instanceof ApiError ? e.message : "Quizplayo could not load your assignments."));
+  }, []);
+
+  if (error) return <div className="alert alert-danger" role="alert">{error}</div>;
+  if (!list) return <LoadingState rows={3} label="Loading your assignments" />;
+  if (list.length === 0) {
+    return (
+      <EmptyState title="No assignments yet">
+        Open a quiz (yours or one from the library) and choose <strong>Assign it</strong>: students do it at their own pace.
+      </EmptyState>
+    );
+  }
+  return (
+    <ul className="assignment-list">
+      {list.map((a) => (
+        <li key={a.assignmentId}>
+          <div>
+            <strong>{a.title}</strong>
+            <div className="muted" style={{ fontSize: 14 }}>
+              {a.classCode ? "Class " + a.classCode : "Anyone with the link"}{a.dueAt && <> · {dueText(a.dueAt)}</>}
+              {" · "}{a.finished} of {a.started} finished
+            </div>
+          </div>
+          <span className="row" style={{ gap: 8 }}>
+            <span className={"chip " + (a.open ? "chip-ok" : "")}>{a.open ? "Open" : "Closed"}</span>
+            <Link className="btn btn-light" href={"/teacher/assignments/" + a.assignmentId}>Results<span className="sr-only"> of {a.title}</span></Link>
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** A student's own class assignments, with where they are in each. */
+function MyAssignments() {
+  const [list, setList] = useState<MyAssignment[] | null>(null);
+
+  useEffect(() => {
+    api<MyAssignment[]>("/api/v1/assignments/for-me").then(setList).catch(() => setList([]));
+  }, []);
+
+  if (!list || list.length === 0) return null;
+  return (
+    <section className="stack" aria-labelledby="my-assignments">
+      <h2 id="my-assignments">Your assignments</h2>
+      <ul className="assignment-list">
+        {list.map((a) => (
+          <li key={a.code}>
+            <div>
+              <strong>{a.title}</strong>
+              <div className="muted" style={{ fontSize: 14 }}>
+                {a.questions} questions{a.dueAt && <> · {dueText(a.dueAt)}</>}
+                {a.status === "DONE" && <> · {a.correct} right, {a.score} points</>}
+              </div>
+            </div>
+            {a.status === "DONE" ? <span className="chip chip-ok">Done</span>
+              : !a.open ? <span className="chip">Closed</span>
+              : <Link className="btn btn-primary" href={"/a/" + a.code}>{a.status === "IN_PROGRESS" ? "Carry on" : "Start"}<span className="sr-only"> {a.title}</span></Link>}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function StudentHome() {
   const me = useMe();
   const router = useRouter();
@@ -486,6 +561,8 @@ function StudentHome() {
         <button className="btn btn-primary" type="submit">Enter</button>
         <p className="muted">You&apos;re signed in, so games at {me.school.name} save your score here.</p>
       </form>
+
+      <MyAssignments />
 
       <section className="stack">
         <h2>My results</h2>

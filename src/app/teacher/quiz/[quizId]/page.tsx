@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AppFrame } from "@/components/AppFrame";
 import { AnswerShape } from "@/components/AnswerShape";
+import { AssignBox } from "@/components/AssignBox";
 import { HostGame } from "@/components/HostGame";
 import { api, ApiError } from "@/lib/api";
 import { gradeLabel, QuizView, TYPE_LABEL } from "@/lib/content";
@@ -86,6 +87,7 @@ function Quiz() {
       } />
 
       <HostGame target={{ quizId }} playable={q.playableCount} total={q.questionCount} />
+      <AssignBox target={{ quizId }} />
       {error && <div className="alert alert-danger" role="alert">{error}</div>}
 
       <ol className="question-list">
