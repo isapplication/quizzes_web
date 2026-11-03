@@ -60,7 +60,7 @@ function TopBar() {
           <>
             <Link className="btn btn-primary nav-create" href="/teacher/quiz/new">Create a quiz</Link>
             <Link href="/home">My quizzes</Link>
-            <Link href="/teacher/bank">Question bank</Link>
+            <Link href="/library">Library</Link>
             <Link href="/teacher/studio">AI Studio</Link>
           </>
         ) : (

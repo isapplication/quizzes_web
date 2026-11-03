@@ -22,7 +22,7 @@ interface Setup {
   };
   signIn: { schoolPage: string | null };
   people: { classes: number; teachers: number; students: number; lastSyncedAt: string | null; done: boolean; fromPortal: boolean };
-  bank: { quizzes: number; importedGrades: number[]; suggestedGrades: number[]; done: boolean };
+  grades: { grades: number[]; done: boolean };
   brandDone: boolean;
   live: boolean;
   dismissed: boolean;
@@ -38,7 +38,7 @@ export default function SetupPage() {
 }
 
 /**
- * "Get started" for a school's admin: details, sign-in page, people, question bank. The school is live from the
+ * "Get started" for a school's admin: details, sign-in page, people, the school's grades. The school is live from the
  * start; every step is optional and the admin can skip the checklist.
  */
 function SchoolSetup() {
@@ -53,7 +53,7 @@ function SchoolSetup() {
   const show = useCallback((s: Setup) => {
     setSetup(s);
     setDetails({ schoolCode: s.school.schoolCode ?? "", countryCode: s.school.countryCode ?? "", city: s.school.city ?? "" });
-    setGrades((g) => (g.length > 0 ? g : s.bank.suggestedGrades.filter((x) => !s.bank.importedGrades.includes(x))));
+    setGrades(s.grades.grades);
   }, []);
 
   useEffect(() => {
@@ -73,6 +73,22 @@ function SchoolSetup() {
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "That did not work. Please try again.");
       return false;
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  /** The grades go through the same call as the home page's first-landing picker, then the checklist reloads. */
+  async function saveGrades() {
+    setBusy("grades");
+    setError(null);
+    setSaved(null);
+    try {
+      await api("/api/v1/workspace/grades", { method: "POST", body: { grades } });
+      show(await api<Setup>("/api/v1/admin/setup"));
+      setSaved("Grades saved.");
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Quizplayo could not save the grades. Please try again.");
     } finally {
       setBusy(null);
     }
@@ -212,35 +228,33 @@ function SchoolSetup() {
           </div>
         </li>
 
-        <li id="bank" className={"step" + (setup.bank.done ? " done" : "")}>
+        <li id="grades" className={"step" + (setup.grades.done ? " done" : "")}>
           <span className="step-number">4</span>
           <div className="card stack">
-            <h2>Question bank</h2>
+            <h2>Grades</h2>
             <p>
-              <strong>{setup.bank.quizzes}</strong> quizzes ready
-              {setup.bank.importedGrades.length > 0 && <> (grades {gradesText(setup.bank.importedGrades)})</>}. Choose the
-              grades to import from the 1,300-question Quizplayo bank.
+              {setup.grades.done
+                ? <>Your school teaches {gradesText(setup.grades.grades)}. Every teacher&apos;s home page shows ready-made
+                  quizzes for these grades from the Quizplayo library.</>
+                : <>Choose the grades your school teaches. Every teacher&apos;s home page then shows ready-made quizzes for
+                  them from the Quizplayo library.</>}
             </p>
             <div className="checks">
               {GRADES.map((g) => {
-                const imported = setup.bank.importedGrades.includes(g);
-                const on = imported || grades.includes(g);
+                const on = grades.includes(g);
                 return (
                   <label key={g} className={on ? "on" : undefined}>
-                    <input type="checkbox" checked={on} disabled={imported}
-                           onChange={() => setGrades(grades.includes(g) ? grades.filter((x) => x !== g) : [...grades, g])} />
+                    <input type="checkbox" checked={on}
+                           onChange={() => setGrades(on ? grades.filter((x) => x !== g) : [...grades, g])} />
                     {g === 0 ? "K" : "Grade " + gradeLabel(g)}
-                    {imported && " ✓"}
                   </label>
                 );
               })}
             </div>
             <div>
               <button className="btn btn-secondary" type="button" disabled={busy !== null || grades.length === 0}
-                      onClick={async () => {
-                        if (await run("bank", "/api/v1/admin/setup/bank-import", "POST", { grades })) setGrades([]);
-                      }}>
-                {busy === "bank" ? "Importing…" : "Import the chosen grades"}
+                      onClick={saveGrades}>
+                {busy === "grades" ? "Saving…" : "Save grades"}
               </button>
             </div>
           </div>

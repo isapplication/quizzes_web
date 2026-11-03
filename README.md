@@ -1,6 +1,6 @@
 # quizplayo-web
 
-The Quizplayo web app: landing page, school registration, teacher screens (question bank, AI Studio, live game
+The Quizplayo web app: landing page, school registration, teacher screens (library and starter shelf, AI Studio, live game
 host), student play screens, school setup, Brand settings and the platform console. Next.js 15, React 19,
 TypeScript. Deployed to **Vercel**.
 

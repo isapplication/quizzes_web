@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { AppFrame } from "@/components/AppFrame";
 import { JoinSuggestion, LinkAccountOffer } from "@/components/MembershipBanners";
+import { StarterShelf } from "@/components/StarterShelf";
 import { normalizePin } from "@/lib/pin";
 import { api, ApiError } from "@/lib/api";
 import { gradeLabel, QuizSummary } from "@/lib/content";
@@ -52,32 +53,37 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "activity", label: "Activity" },
 ];
 
-/** The teacher's dashboard: first-visit grades or the admin's checklist on top, then My quizzes, Games and Activity. */
+/**
+ * The teacher's dashboard: the grade picker on the first visit (a personal workspace's teacher, or a school's admin),
+ * the admin's checklist, the starter shelf for the workspace's grades, then My quizzes, Games and Activity.
+ */
 function TeacherHome() {
   const me = useMe();
   const router = useRouter();
   const params = useSearchParams();
   const asked = params.get("tab") as Tab | null;
   const tab: Tab = asked && TABS.some((t) => t.id === asked) ? asked : "quizzes";
-  const [sample, setSample] = useState<string | null>(null);
-  const [reload, setReload] = useState(0);
-  const firstVisit = isIndependent(me) && me.school.grades.length === 0 && !sample;
+  const [grades, setGrades] = useState<number[]>(me.school.grades);
+  const [changing, setChanging] = useState(false);
+  const canPick = isIndependent(me) || isSchoolAdmin(me);
+  const firstVisit = canPick && grades.length === 0;
 
   return (
     <div className="stack">
       <PageHeader title={"Welcome, " + me.name}
                   description={<>{me.school.name}{me.classes.length > 0 && <> · Classes {me.classes.join(", ")}</>}</>}
                   action={<Link className="btn btn-primary" href="/teacher/quiz/new">Create a quiz</Link>} />
-      {firstVisit && <FirstVisit onDone={(id) => { setSample(id); setReload((n) => n + 1); }} />}
-      {sample && (
-        <div className="alert alert-success home-callout">
-          <span>Your sample quiz is ready, along with the question bank for your grades. Try hosting it!</span>
-          <Link className="btn btn-primary" href={"/teacher/quiz/" + sample}>Host the sample quiz</Link>
-        </div>
+      {(firstVisit || changing) && (
+        <FirstVisit school={!isIndependent(me)} current={grades} changing={changing}
+                    onDone={(g) => { setGrades(g); setChanging(false); }} onCancel={() => setChanging(false)} />
       )}
-      {isSchoolAdmin(me) && !isIndependent(me) && <Checklist />}
+      {isSchoolAdmin(me) && !isIndependent(me) && <Checklist key={grades.join(",")} />}
       <LinkAccountOffer />
       <JoinSuggestion />
+      {grades.length > 0 && !changing && (
+        <StarterShelf grades={grades} firstGrade={me.grade}
+                      onChangeGrades={isSchoolAdmin(me) && !isIndependent(me) ? () => setChanging(true) : undefined} />
+      )}
 
       <div className="tabs" role="tablist" aria-label="Your dashboard">
         {TABS.map((t) => (
@@ -87,7 +93,7 @@ function TeacherHome() {
           </button>
         ))}
       </div>
-      {tab === "quizzes" && <MyQuizzes key={reload} />}
+      {tab === "quizzes" && <MyQuizzes />}
       {tab === "games" && <Games />}
       {tab === "activity" && <ActivityFeed />}
       {me.devTools && (
@@ -97,9 +103,18 @@ function TeacherHome() {
   );
 }
 
-/** A new teacher's first visit: the grades they teach, then the question bank for them and a sample quiz. */
-function FirstVisit({ onDone }: { onDone: (sampleQuizId: string | null) => void }) {
-  const [grades, setGrades] = useState<number[]>([]);
+/**
+ * The grades the workspace teaches, which pick its starter shelf from the library: a teacher's own on their first
+ * visit, or a school's (its admin picks them on first landing and may change them later).
+ */
+function FirstVisit({ school, current, changing, onDone, onCancel }: {
+  school: boolean;
+  current: number[];
+  changing: boolean;
+  onDone: (grades: number[]) => void;
+  onCancel: () => void;
+}) {
+  const [grades, setGrades] = useState<number[]>(current);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -107,10 +122,8 @@ function FirstVisit({ onDone }: { onDone: (sampleQuizId: string | null) => void 
     setBusy(true);
     setError(null);
     try {
-      const r = await api<{ grades: number[]; sampleQuizId: string | null }>("/api/v1/workspace/grades", {
-        method: "POST", body: { grades },
-      });
-      onDone(r.sampleQuizId);
+      const r = await api<{ grades: number[] }>("/api/v1/workspace/grades", { method: "POST", body: { grades } });
+      onDone(r.grades);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Quizplayo could not save your grades. Please try again.");
       setBusy(false);
@@ -120,8 +133,13 @@ function FirstVisit({ onDone }: { onDone: (sampleQuizId: string | null) => void 
   return (
     <section className="card stack first-visit" aria-labelledby="first-visit-title">
       <div>
-        <h2 id="first-visit-title" style={{ margin: 0 }}>Pick the grades you teach</h2>
-        <p className="muted" style={{ margin: "4px 0 0" }}>We&apos;ll add ready-made quizzes for them and set up your first quiz to try.</p>
+        <h2 id="first-visit-title" style={{ margin: 0 }}>
+          {school ? "Which grades does your school teach?" : "Pick the grades you teach"}
+        </h2>
+        <p className="muted" style={{ margin: "4px 0 0" }}>
+          We&apos;ll put ready-made quizzes for {school ? "these grades on every teacher's home page" : "them on your home page"}.
+          {school && " You can change them later."}
+        </p>
       </div>
       <div className="checks">
         {GRADES.map((g) => {
@@ -136,10 +154,11 @@ function FirstVisit({ onDone }: { onDone: (sampleQuizId: string | null) => void 
         })}
       </div>
       {error && <div className="alert alert-danger" role="alert">{error}</div>}
-      <div className="row">
+      <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
         <button className="btn btn-primary" type="button" onClick={save} disabled={busy || grades.length === 0}>
-          {busy ? "Setting up…" : "Set up my quizzes"}
+          {busy ? "Saving…" : changing ? "Save grades" : "Show my starter quizzes"}
         </button>
+        {changing && <button className="btn btn-light" type="button" onClick={onCancel}>Cancel</button>}
       </div>
     </section>
   );
@@ -147,7 +166,7 @@ function FirstVisit({ onDone }: { onDone: (sampleQuizId: string | null) => void 
 
 interface Setup {
   people: { done: boolean; fromPortal: boolean };
-  bank: { done: boolean };
+  grades: { done: boolean };
   brandDone: boolean;
   dismissed: boolean;
   signIn: { schoolPage: string | null };
@@ -165,7 +184,7 @@ function Checklist() {
   const items = [
     { done: setup.people.done, label: setup.people.fromPortal ? "Copy people from your school's system" : "Add your teachers and students",
       href: setup.people.fromPortal ? "/admin/setup" : "/admin/people" },
-    { done: setup.bank.done, label: "Choose the question-bank grades", href: "/admin/setup#bank" },
+    { done: setup.grades.done, label: "Choose your school's grades", href: "/home" },
     { done: setup.brandDone, label: "Add your logo and colours", href: "/admin/brand" },
   ];
   if (items.every((i) => i.done)) return null;
@@ -248,7 +267,7 @@ function MyQuizzes() {
       <EmptyState title="No quizzes yet" action={
         <div className="row" style={{ gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
           <Link className="btn btn-primary" href="/teacher/quiz/new">Create a quiz</Link>
-          <Link className="btn btn-light" href="/teacher/bank">Browse the question bank</Link>
+          <Link className="btn btn-light" href="/library">Browse the library</Link>
           <Link className="btn btn-light" href="/teacher/studio">Draft one with AI</Link>
         </div>
       }>

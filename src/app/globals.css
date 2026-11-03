@@ -606,7 +606,7 @@ input[type=email], input[type=tel], input[type=password], input[type=search] {
 .editor-head { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
 .editor-actions { display: grid; gap: 6px; justify-items: end; flex: 1 1 220px; }
 .editor { display: grid; grid-template-columns: minmax(220px, 300px) minmax(0, 1fr); gap: 16px; align-items: start; }
-.editor-list ol { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 4px; }
+.editor-list ol { list-style: none; margin: 0 0 12px; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; }
 .editor-list li button { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 8px 10px; border-radius: 8px; border: 1px solid transparent; background: none; font: inherit; color: var(--ink); cursor: pointer; }
 .editor-list li button:hover { background: var(--page); }
 .editor-list li button.on { border-color: var(--pc); background: var(--plc); }
@@ -623,7 +623,7 @@ input[type=email], input[type=tel], input[type=password], input[type=search] {
 .answer-edit-correct { display: flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 600; white-space: nowrap; cursor: pointer; }
 .answer-edit-remove { background: rgba(0, 0, 0, 0.2); color: inherit; border: 0; border-radius: 6px; width: 28px; height: 28px; font-size: 18px; cursor: pointer; }
 @media (max-width: 768px) {
-  .editor { grid-template-columns: 1fr; }
+  .editor { grid-template-columns: minmax(0, 1fr); }
   .answer-edits { grid-template-columns: 1fr; }
   .editor-actions { justify-items: start; }
 }
@@ -687,3 +687,46 @@ input[type=email], input[type=tel], input[type=password], input[type=search] {
 .workspace-list li:last-child {
   border-bottom: 0;
 }
+
+/* ---- The starter library: shelf, library page and preview ---- */
+.library-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr)); gap: 12px; }
+/* One card per quiz: the title link is stretched over the card; Host and "Edit a copy" stay their own buttons. */
+.library-card {
+  position: relative; container-type: inline-size;
+  display: grid; grid-template-rows: auto 1fr auto; gap: 8px;
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px;
+}
+.library-card > header { display: flex; align-items: flex-start; gap: 10px; }
+.library-card h3 { margin: 0; font-size: 16px; line-height: 1.3; }
+.library-card h3 a { color: var(--sc); text-decoration: none; }
+.library-card a.card-link::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
+.library-card a.card-link:focus-visible { outline: none; }
+.library-card:has(a.card-link:focus-visible) { outline: 3px solid var(--pc); outline-offset: 2px; }
+.library-card:has(a.card-link:hover) { border-color: var(--pc); box-shadow: 0 2px 10px rgba(0, 27, 71, 0.08); }
+.library-card > p { margin: 0; font-size: 14px; }
+.library-card > footer { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.library-card > footer button { position: relative; z-index: 1; }
+.library-card-visual {
+  flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 8px;
+  background: var(--plc); font-size: 20px;
+}
+.library-card-error { flex-basis: 100%; margin: 0; color: var(--danger); font-size: 13px; }
+@container (max-width: 220px) {
+  .library-card > footer button { flex: 1 1 100%; }
+}
+.chip-ai { background: var(--plc); color: var(--sc); font-size: 11px; }
+.library-filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.library-filters .field { min-width: 0; flex: 0 1 200px; }
+.library-filters .library-search { flex: 1 1 260px; }
+.library-filters .library-search input { flex: 1; min-width: 0; }
+.question-visual { font-size: 1.2em; }
+.report-button {
+  position: relative; z-index: 1; background: none; border: 0; padding: 4px 0; color: var(--pc);
+  font: inherit; font-size: 13px; text-decoration: underline; cursor: pointer;
+}
+.report-dialog { width: min(480px, calc(100vw - 32px)); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 24px; }
+.report-dialog h2 { margin: 0; font-size: 18px; }
+.report-dialog textarea { width: 100%; }
+/* Keep scrolling inside the dialog from moving the page behind it. */
+.report-dialog:modal { overscroll-behavior: contain; }
+.report-dialog::backdrop { background: rgba(0, 27, 71, 0.45); overflow: hidden; overscroll-behavior: contain; }

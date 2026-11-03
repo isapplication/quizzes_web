@@ -10,7 +10,7 @@ const DEMO_ANSWERS = ["Evaporation", "Condensation", "Precipitation", "Collectio
 const FEATURES = [
   { title: "Live games with a PIN", text: "Show a PIN, the class joins on any device with a nickname, and the scores appear as answers arrive. Players need no account." },
   { title: "AI Studio", text: "Type a topic and a grade: AI drafts the questions, checks every answer, and you approve them." },
-  { title: "1,300 ready questions", text: "A question bank from Kindergarten to Grade 12, ready to play or to change." },
+  { title: "Ready on day one", text: "A library of quizzes for every grade from Kindergarten to Grade 12: pick your grades and host one straight away, or edit your own copy." },
   { title: "Made for schools too", text: "A school gets its own page and colours, accounts for teachers and students, and every result in one place." },
 ];
 

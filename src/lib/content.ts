@@ -5,7 +5,8 @@ export interface QuizSummary {
   grade: number;
   course: string | null;
   standard: string | null;
-  source: "BANK" | "AI" | "MANUAL";
+  /** LIBRARY: a teacher's copy of a library quiz ("Edit a copy"). BANK: the retired per-school bank copies. */
+  source: "BANK" | "AI" | "MANUAL" | "LIBRARY";
   status: string;
   bankRef: string | null;
   ownerUserId: string | null;
@@ -14,6 +15,9 @@ export interface QuizSummary {
   questionCount: number;
   playableCount: number;
   updatedAt: string;
+  /** For a copy of a library quiz: which one, and which of its versions was copied. */
+  originLibraryQuizId: string | null;
+  originVersionNo: number | null;
 }
 
 export interface QuestionView {

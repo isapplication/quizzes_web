@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { LibraryConsole } from "@/components/LibraryConsole";
 import { LocationSettings } from "@/components/LocationSettings";
 import { AppFrame } from "@/components/AppFrame";
 import { api, ApiError } from "@/lib/api";
@@ -30,11 +31,12 @@ interface SignUpDay {
   schools: number;
 }
 
-type Tab = "workspaces" | "sign-ups" | "settings";
+type Tab = "workspaces" | "sign-ups" | "library" | "settings";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "workspaces", label: "Schools and teachers" },
   { id: "sign-ups", label: "Sign-ups" },
+  { id: "library", label: "Library" },
   { id: "settings", label: "Settings" },
 ];
 
@@ -75,7 +77,7 @@ function PlatformConsole() {
 
   return (
     <div className="stack">
-      <PageHeader title="Platform console" description="Everyone who signed up, sign-ups per day, and product settings." />
+      <PageHeader title="Platform console" description="Everyone who signed up, sign-ups per day, the shared library, and product settings." />
       <div className="tabs" role="tablist">
         {TABS.map((t) => (
           <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} className={tab === t.id ? "active" : undefined}
@@ -88,6 +90,7 @@ function PlatformConsole() {
       {notice && <div className="alert alert-success">{notice}</div>}
       {tab === "workspaces" && <Workspaces plans={plans} onError={setError} onNotice={setNotice} />}
       {tab === "sign-ups" && <SignUps onError={setError} />}
+      {tab === "library" && <LibraryConsole onError={setError} onNotice={setNotice} />}
       {tab === "settings" && <LocationSettings onError={setError} onNotice={setNotice} />}
     </div>
   );
