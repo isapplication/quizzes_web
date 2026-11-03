@@ -60,6 +60,31 @@ export async function api<T>(path: string, init: { method?: string; body?: unkno
   return data as T;
 }
 
+/**
+ * Downloads a file from the Quiz API as this tab's person (its tab key, like api()), saving it as {@code name}.
+ * Throws an ApiError with the API's message when it can't.
+ */
+export async function downloadFile(path: string, name: string): Promise<void> {
+  const key = tabKey();
+  let response: Response;
+  try {
+    response = await fetch(path, { headers: key ? { Authorization: "Bearer " + key } : undefined, credentials: "same-origin" });
+  } catch {
+    throw new ApiError(0, "offline", "Quizplayo cannot reach its server. Check your internet connection and try again.");
+  }
+  if (!response.ok) {
+    if (response.status === 401 && key) clearTabKey();
+    const body = (safeJson(await response.text()) ?? {}) as { error?: string; message?: string };
+    throw new ApiError(response.status, body.error ?? "http_" + response.status, body.message ?? defaultMessage(response.status));
+  }
+  const url = URL.createObjectURL(await response.blob());
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function safeJson(text: string): unknown {
   try {
     return JSON.parse(text);

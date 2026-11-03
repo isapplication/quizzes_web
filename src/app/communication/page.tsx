@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { AppFrame, COMMUNICATION_CHANGED } from "@/components/AppFrame";
-import { api, ApiError } from "@/lib/api";
-import { Inbox, KIND_LABEL, Message, ownLink, statusChip, statusText, when } from "@/lib/communication";
+import { api, ApiError, downloadFile } from "@/lib/api";
+import { AttachmentList } from "@/components/AttachmentList";
+import { EmailFile, Inbox, KIND_LABEL, Message, ownLink, statusChip, statusText, when } from "@/lib/communication";
 import { EmptyState, LoadingState, PageHeader } from "@/components/ui/States";
 
 export default function CommunicationRoute() {
@@ -31,6 +32,15 @@ function Communication() {
   const [notice, setNotice] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+
+  async function download(m: Message, f: EmailFile) {
+    setError(null);
+    try {
+      await downloadFile(`/api/v1/communication/${m.id}/attachments/${f.id}`, f.name);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : `Quizplayo could not download "${f.name}". Please try again.`);
+    }
+  }
 
   const load = useCallback(() => {
     api<Inbox>("/api/v1/communication").then(setInbox)
@@ -114,7 +124,10 @@ function Communication() {
                     </summary>
                     <div className="message">
                       <pre className="email-text">{m.body}</pre>
-                      {m.status === "FAILED" && m.error && <p className="muted" style={{ margin: 0 }}>Why it wasn&apos;t sent: {m.error}</p>}
+                      {m.attachments.length > 0 && (
+                        <AttachmentList files={m.attachments} label={"Attachments of " + m.subject}
+                                        onDownload={(f) => download(m, f)} />
+                      )}
                       <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
                         {link && <Link className="btn btn-primary" href={link}>{LINK_WORDS[m.kind] ?? "Open the link"}</Link>}
                         {inbox.mailOn && m.status !== "PENDING" && (

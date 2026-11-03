@@ -192,7 +192,8 @@ input[type=email], input[type=tel], input[type=password], input[type=search] {
 .search-results a { display: flex; justify-content: space-between; gap: 12px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; text-decoration: none; color: var(--ink); background: var(--card); }
 .search-results a:hover { border-color: var(--pc); }
 /* Wide tables scroll sideways on narrow screens instead of cutting off their last column. */
-.table-scroll { overflow-x: auto; }
+/* position: hidden screen-reader text (.sr-only) inside a wide table stays in this scroll box, so phones don't scroll sideways. */
+.table-scroll { overflow-x: auto; position: relative; }
 .table-scroll table { min-width: 720px; }
 
 /* Landing page: the hero looks like a live game, so the page says "quiz" at a glance. */

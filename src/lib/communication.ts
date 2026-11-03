@@ -11,11 +11,19 @@ export interface Message {
   /** That link, while it still works. */
   link: string | null;
   status: EmailStatus;
-  error: string | null;
   createdAt: string;
   sentAt: string | null;
   read: boolean;
   schoolName: string | null;
+  attachments: EmailFile[];
+}
+
+/** A file sent with an email. */
+export interface EmailFile {
+  id: string;
+  name: string;
+  type: string;
+  size: number;
 }
 
 export interface Inbox {
@@ -29,7 +37,9 @@ export interface Inbox {
 export interface ConsoleEmail {
   id: string;
   createdAt: string;
+  /** Its first recipient; {@code recipients} is how many it has. */
   to: string;
+  recipients: number;
   subject: string;
   kind: string;
   schoolName: string | null;
@@ -37,6 +47,9 @@ export interface ConsoleEmail {
   error: string | null;
   sentAt: string | null;
   mailOn: boolean;
+  /** The SMTP service it was sent with; null before this was recorded, or while it is pending. */
+  provider: string | null;
+  attachments: number;
   /** A code or link that still works and was not delivered. */
   hasSecret: boolean;
   resentFrom: string | null;
@@ -50,6 +63,31 @@ export interface ConsolePage {
   more: boolean;
   today: Record<EmailStatus, number>;
   mailOn: boolean;
+  /** The SMTP service in use now. */
+  provider: string;
+  /** Every provider found in stored emails, for the filter. */
+  providers: string[];
+}
+
+/** The provider filter's value for emails that don't record one. */
+export const PROVIDER_NOT_RECORDED = "NONE";
+
+/** One email as the console opens it: everything it was sent with. */
+export interface ConsoleDetail {
+  body: string;
+  smtpHost: string | null;
+  from: string | null;
+  replyTo: string | null;
+  recipients: { role: "TO" | "CC" | "BCC"; address: string; readAt: string | null }[];
+  attachments: (EmailFile & { sha256: string })[];
+}
+
+/** "240 KB", "3.1 MB". */
+export function fileSize(bytes: number): string {
+  const mb = bytes / (1024 * 1024);
+  if (mb >= 1) return new Intl.NumberFormat(undefined, { style: "unit", unit: "megabyte", maximumFractionDigits: 1 }).format(mb);
+  return new Intl.NumberFormat(undefined, { style: "unit", unit: "kilobyte", maximumFractionDigits: 0 })
+    .format(Math.max(1, Math.round(bytes / 1024)));
 }
 
 export const KIND_LABEL: Record<string, string> = {

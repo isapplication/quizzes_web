@@ -1,8 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, ApiError } from "@/lib/api";
-import { ConsoleEmail, ConsolePage, KIND_LABEL, statusChip, statusText, when } from "@/lib/communication";
+import { api, ApiError, downloadFile } from "@/lib/api";
+import {
+  ConsoleDetail, ConsoleEmail, ConsolePage, EmailFile, KIND_LABEL, PROVIDER_NOT_RECORDED, statusChip, statusText, when,
+} from "@/lib/communication";
+import { AttachmentList } from "@/components/AttachmentList";
 import { LoadingState } from "@/components/ui/States";
 
 function message(e: unknown, fallback: string): string {
@@ -10,13 +13,15 @@ function message(e: unknown, fallback: string): string {
 }
 
 /**
- * The platform console's Emails tab: every email Quizplayo stored, to every recipient, newest first. Opening one, and
- * showing its code or link, are logged. With mail off this is how a code or link reaches the person: copy it and pass
+ * The platform console's Emails tab: every email Quizplayo stored, to every recipient, newest first, with the provider,
+ * From, Reply-To, To, CC, BCC and attachments it was sent with. Opening one, showing its code or link, and downloading
+ * an attachment are logged. With mail off this is how a code or link reaches the person: copy it and pass
  * it on. Only the Quizplayo team sees this page.
  */
 export function EmailConsole({ onError, onNotice }: { onError: (m: string | null) => void; onNotice: (m: string | null) => void }) {
   const [status, setStatus] = useState("");
   const [kind, setKind] = useState("");
+  const [provider, setProvider] = useState("");
   const [search, setSearch] = useState("");
   const [q, setQ] = useState("");
   const [page, setPage] = useState<ConsolePage | null>(null);
@@ -27,10 +32,11 @@ export function EmailConsole({ onError, onNotice }: { onError: (m: string | null
     const u = new URLSearchParams();
     if (status) u.set("status", status);
     if (kind) u.set("kind", kind);
+    if (provider) u.set("provider", provider);
     if (q) u.set("q", q);
     if (before) u.set("before", before);
     return "/api/v1/platform/emails?" + u.toString();
-  }, [status, kind, q]);
+  }, [status, kind, provider, q]);
 
   const load = useCallback(() => {
     setPage(null);
@@ -54,9 +60,10 @@ export function EmailConsole({ onError, onNotice }: { onError: (m: string | null
     <section className="stack" aria-labelledby="emails-title">
       <h2 id="emails-title" style={{ margin: 0 }}>Emails</h2>
       <p className="muted" style={{ margin: 0 }}>
-        Every email Quizplayo writes is stored here with what happened to it. Opening an email and showing its code or
-        link are written to the audit log.
+        Every email Quizplayo writes is stored here with what happened to it and what it was sent with. Opening an email,
+        showing its code or link and downloading an attachment are written to the audit log.
       </p>
+      {page?.mailOn && <p className="muted" style={{ margin: 0 }}>Emails are sent through <strong>{page.provider}</strong>.</p>}
       {page && !page.mailOn && (
         <div className="alert alert-warning" role="status">
           Mail is switched off on this server (ISQUIZ_MAIL_SERVICE=false): emails are stored, not sent. Open a pending
@@ -87,6 +94,16 @@ export function EmailConsole({ onError, onNotice }: { onError: (m: string | null
             {Object.entries(KIND_LABEL).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
           </select>
         </div>
+        <div className="field">
+          <label htmlFor="em-provider">Provider</label>
+          <select id="em-provider" value={provider} onChange={(e) => setProvider(e.target.value)}>
+            <option value="">Any provider</option>
+            {page?.providers.map((p) => <option key={p} value={p}>{p}</option>)}
+            {provider && provider !== PROVIDER_NOT_RECORDED && page && !page.providers.includes(provider)
+              && <option value={provider}>{provider}</option>}
+            <option value={PROVIDER_NOT_RECORDED}>Not recorded</option>
+          </select>
+        </div>
         <div className="field library-search">
           <label htmlFor="em-q">Recipient</label>
           <div className="row" style={{ gap: 8 }}>
@@ -103,19 +120,28 @@ export function EmailConsole({ onError, onNotice }: { onError: (m: string | null
         <div className="table-scroll" tabIndex={0} role="region" aria-labelledby="emails-caption">
           <table className="sticky-head">
             <caption id="emails-caption" className="sr-only">Stored emails, newest first</caption>
-            <thead><tr><th>When</th><th>To</th><th>Subject</th><th>Kind</th><th>School</th><th>Status</th><th /></tr></thead>
+            <thead><tr><th>When</th><th>To</th><th>Subject</th><th>Kind</th><th>School</th><th>Provider</th><th>Status</th><th /></tr></thead>
             <tbody>
               {page.emails.map((e) => (
                 <tr key={e.id}>
                   <td style={{ whiteSpace: "nowrap" }}>{when(e.createdAt)}</td>
-                  <td style={{ overflowWrap: "anywhere" }}>{e.to}</td>
+                  <td style={{ overflowWrap: "anywhere" }}>
+                    {e.to}
+                    {e.recipients > 1 && <div className="muted" style={{ fontSize: 12 }}>and {e.recipients - 1} more</div>}
+                  </td>
                   <td style={{ overflowWrap: "anywhere" }}>
                     {e.subject}
+                    {e.attachments > 0 && (
+                      <div className="muted" style={{ fontSize: 12 }}>
+                        <span aria-hidden="true">📎 </span>{e.attachments === 1 ? "1 attachment" : `${e.attachments} attachments`}
+                      </div>
+                    )}
                     {e.resentFrom && <div className="muted" style={{ fontSize: 12 }}>Sent again by {e.resentBy}</div>}
                     {e.sentAgainAt && <div className="muted" style={{ fontSize: 12 }}>Sent again on {when(e.sentAgainAt)} by {e.sentAgainBy}</div>}
                   </td>
                   <td>{KIND_LABEL[e.kind] ?? e.kind}</td>
                   <td>{e.schoolName ?? <span className="muted">None</span>}</td>
+                  <td>{e.provider ?? <span className="muted">Not recorded</span>}</td>
                   <td><span className={statusChip(e.status)}>{e.status === "PENDING" ? "Pending" : e.status === "SENT" ? "Sent" : "Failed"}</span></td>
                   <td>
                     <button type="button" className="btn btn-light" onClick={() => setOpen(e)}>
@@ -151,7 +177,7 @@ function EmailDialog({ email, mailOn, onClose, onSentAgain }: {
   onSentAgain: (message: string) => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
-  const [body, setBody] = useState<string | null>(null);
+  const [detail, setDetail] = useState<ConsoleDetail | null>(null);
   const [secret, setSecret] = useState<{ secret: string; body: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -160,7 +186,7 @@ function EmailDialog({ email, mailOn, onClose, onSentAgain }: {
 
   useEffect(() => {
     dialog.current?.showModal();
-    api<{ body: string }>("/api/v1/platform/emails/" + email.id).then((d) => setBody(d.body))
+    api<ConsoleDetail>("/api/v1/platform/emails/" + email.id).then(setDetail)
       .catch((e: unknown) => setError(message(e, "Quizplayo could not open this email.")));
   }, [email.id]);
 
@@ -184,6 +210,15 @@ function EmailDialog({ email, mailOn, onClose, onSentAgain }: {
     }
   }
 
+  async function download(f: EmailFile) {
+    setError(null);
+    try {
+      await downloadFile(`/api/v1/platform/emails/${email.id}/attachments/${f.id}`, f.name);
+    } catch (e) {
+      setError(message(e, `Quizplayo could not download "${f.name}".`));
+    }
+  }
+
   async function sendAgain() {
     setBusy(true);
     setError(null);
@@ -202,7 +237,25 @@ function EmailDialog({ email, mailOn, onClose, onSentAgain }: {
       <div className="stack">
         <h2 id={titleId} style={{ margin: 0, fontSize: 20, overflowWrap: "anywhere" }}>{email.subject}</h2>
         <dl>
-          <dt>To</dt><dd>{email.to}</dd>
+          {(["TO", "CC", "BCC"] as const).map((role) => {
+            const list = (detail?.recipients ?? (role === "TO" ? [{ role, address: email.to, readAt: null }] : []))
+              .filter((r) => r.role === role);
+            return list.length === 0 ? null : (
+              <div key={role} style={{ display: "contents" }}>
+                <dt>{role === "TO" ? "To" : role === "CC" ? "CC" : "BCC"}</dt>
+                <dd style={{ overflowWrap: "anywhere" }}>
+                  {list.map((r) => r.address + (r.readAt ? " (read " + when(r.readAt) + ")" : "")).join(", ")}
+                </dd>
+              </div>
+            );
+          })}
+          <dt>From</dt><dd style={{ overflowWrap: "anywhere" }}>{detail?.from ?? <span className="muted">Not recorded</span>}</dd>
+          <dt>Reply-To</dt><dd style={{ overflowWrap: "anywhere" }}>{detail?.replyTo ?? <span className="muted">Not recorded</span>}</dd>
+          <dt>Provider</dt>
+          <dd>
+            {email.provider ?? <span className="muted">Not recorded</span>}
+            {detail?.smtpHost && <span className="muted"> ({detail.smtpHost})</span>}
+          </dd>
           <dt>Kind</dt><dd>{KIND_LABEL[email.kind] ?? email.kind}</dd>
           {email.schoolName && <><dt>School</dt><dd>{email.schoolName}</dd></>}
           <dt>Written</dt><dd>{when(email.createdAt)}</dd>
@@ -210,8 +263,11 @@ function EmailDialog({ email, mailOn, onClose, onSentAgain }: {
           {email.sentAt && <><dt>Sent</dt><dd>{when(email.sentAt)}</dd></>}
         </dl>
         {error && <div className="alert alert-danger" role="alert">{error}</div>}
-        {body === null && !error && <LoadingState rows={3} label="Opening the email" />}
-        {body !== null && <pre className="email-text">{secret ? secret.body : body}</pre>}
+        {detail === null && !error && <LoadingState rows={3} label="Opening the email" />}
+        {detail !== null && <pre className="email-text">{secret ? secret.body : detail.body}</pre>}
+        {detail !== null && detail.attachments.length > 0 && (
+          <AttachmentList files={detail.attachments} label="Attachments" onDownload={download} />
+        )}
         {email.hasSecret && !secret && (
           <button type="button" className="btn btn-light" onClick={show} style={{ justifySelf: "start" }}>
             Show the {code ? "code" : "link"}
