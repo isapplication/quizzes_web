@@ -8,8 +8,11 @@ export interface LibraryCard {
   grade: number;
   subject: string;
   unit: string | null;
-  /** AI: written by the Quizplayo library generator; BANK: from the original question bank (not re-checked yet). */
-  origin: "AI" | "BANK";
+  /**
+   * AI: written by the Quizplayo library generator; BANK: from the original question bank (not re-checked yet);
+   * SAMPLE: written by the generator's stand-in, for testing only.
+   */
+  origin: "AI" | "BANK" | "SAMPLE";
   versionId: string;
   versionNo: number;
   /** Visible questions only: a question several teachers reported is hidden while it's fixed. */
@@ -67,5 +70,6 @@ export const REPORT_REASONS: { value: string; label: string }[] = [
 
 /** What the card says about where a quiz came from. */
 export function originLabel(origin: LibraryCard["origin"]): string {
+  if (origin === "SAMPLE") return "Sample · test content";
   return origin === "AI" ? "AI-made" : "AI-made · not re-checked yet";
 }
