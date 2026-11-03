@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { AiConsole } from "@/components/AiConsole";
 import { EmailConsole } from "@/components/EmailConsole";
 import { LibraryConsole } from "@/components/LibraryConsole";
 import { LocationSettings } from "@/components/LocationSettings";
@@ -32,12 +33,13 @@ interface SignUpDay {
   schools: number;
 }
 
-type Tab = "workspaces" | "sign-ups" | "library" | "emails" | "settings";
+type Tab = "workspaces" | "sign-ups" | "library" | "ai" | "emails" | "settings";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "workspaces", label: "Schools and teachers" },
   { id: "sign-ups", label: "Sign-ups" },
   { id: "library", label: "Library" },
+  { id: "ai", label: "AI use" },
   { id: "emails", label: "Emails" },
   { id: "settings", label: "Settings" },
 ];
@@ -93,6 +95,7 @@ function PlatformConsole() {
       {tab === "workspaces" && <Workspaces plans={plans} onError={setError} onNotice={setNotice} />}
       {tab === "sign-ups" && <SignUps onError={setError} />}
       {tab === "library" && <LibraryConsole onError={setError} onNotice={setNotice} />}
+      {tab === "ai" && <AiConsole onError={setError} />}
       {tab === "emails" && <EmailConsole onError={setError} onNotice={setNotice} />}
       {tab === "settings" && <LocationSettings onError={setError} onNotice={setNotice} />}
     </div>

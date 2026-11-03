@@ -832,10 +832,18 @@ input[type=email], input[type=tel], input[type=password], input[type=search] {
 .inbox .message { padding: 0 14px 14px; display: grid; gap: 10px; }
 .email-text { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; padding: 12px; background: var(--page); border-radius: 8px; font: inherit; font-size: 15px; line-height: 1.5; }
 .email-dialog { inline-size: min(680px, calc(100vw - 32px)); max-block-size: calc(100dvh - 48px); border: 1px solid var(--border); border-radius: 12px; padding: 20px; background: var(--card); color: var(--ink); }
-.email-dialog::backdrop { background: rgba(0, 27, 71, 0.45); }
+.email-dialog:modal { overscroll-behavior: contain; }
+.email-dialog::backdrop { background: rgba(0, 27, 71, 0.45); overflow: hidden; overscroll-behavior: contain; }
 .email-dialog dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 12px; margin: 0; font-size: 14px; }
 .email-dialog dt { color: var(--muted); }
 .email-dialog dd { margin: 0; overflow-wrap: anywhere; }
 .email-stats { display: flex; flex-wrap: wrap; gap: 8px; }
 .email-stats .stat { padding: 8px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); }
 .email-stats .stat strong { display: block; font-size: 22px; }
+/* AI use: one AI Studio run (admin page and console). */
+.ai-run-dialog { inline-size: min(880px, calc(100vw - 32px)); }
+.ai-drafts { display: grid; gap: 12px; margin: 8px 0 0; padding-inline-start: 20px; }
+.ai-drafts > li { display: grid; gap: 4px; }
+.ai-options { margin: 0; padding-inline-start: 16px; font-size: 14px; list-style: none; }
+.ai-reply { margin-block-start: 8px; }
+.ai-reply summary, .ai-run-dialog details > summary { cursor: pointer; font-weight: 600; }

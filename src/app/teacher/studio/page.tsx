@@ -6,6 +6,7 @@ import { AppFrame } from "@/components/AppFrame";
 import { AnswerShape } from "@/components/AnswerShape";
 import { api } from "@/lib/api";
 import { gradeLabel } from "@/lib/content";
+import { useMe } from "@/lib/me";
 import { PageHeader } from "@/components/ui/States";
 
 interface StudioStatus {
@@ -62,10 +63,12 @@ export default function StudioPage() {
 
 function Studio() {
   const router = useRouter();
+  const me = useMe();
   const [status, setStatus] = useState<StudioStatus | null>(null);
   const [topic, setTopic] = useState("");
   const [grade, setGrade] = useState(8);
   const [subject, setSubject] = useState("Science");
+  const [classCode, setClassCode] = useState("");
   const [runId, setRunId] = useState<string | null>(null);
   const [run, setRun] = useState<Run | null>(null);
   const [kept, setKept] = useState<Record<number, DraftQuestion>>({});
@@ -125,7 +128,7 @@ function Studio() {
     try {
       const r = await api<{ runId: string }>("/api/v1/ai/drafts", {
         method: "POST",
-        body: { topic, grade, subject, count: 10 },
+        body: { topic, grade, subject, count: 10, classCode: classCode || null },
       });
       setRunId(r.runId);
     } catch (err) {
@@ -154,7 +157,7 @@ function Studio() {
     const questions = Object.keys(kept)
       .map(Number)
       .sort((a, b) => a - b)
-      .map((p) => kept[p]);
+      .map((p) => ({ ...kept[p], position: p }));
     try {
       const r = await api<{ quizId: string }>("/api/v1/ai/drafts/" + runId + "/publish", {
         method: "POST",
@@ -206,6 +209,15 @@ function Studio() {
               <option key={s}>{s}</option>
             ))}
           </select>
+          {me.classes.length > 0 && (
+            <>
+              <label htmlFor="for-class">For</label>
+              <select id="for-class" value={classCode} onChange={(e) => setClassCode(e.target.value)}>
+                <option value="">My workspace</option>
+                {me.classes.map((c) => <option key={c} value={c}>Class {c}</option>)}
+              </select>
+            </>
+          )}
           <span className="spacer" />
           <button className="btn btn-primary" type="submit" disabled={busy || topic.trim().length < 3}>
             Draft 10 questions
