@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AnswerTile, ordinal, TimerBar, useCountdown } from "./Stage";
+import { AnswerTile, ordinal, TeamBadge, TimerBar, useCountdown } from "./Stage";
 import { connectLive, LiveConnection, LiveMessage, LiveStatus } from "@/lib/live";
 import { OwnerBrandMark, useOwnerBrand } from "@/components/OwnerBrand";
 import type { ShownBrand } from "@/lib/me";
@@ -10,9 +10,12 @@ interface Question {
   index: number;
   total: number;
   text: string;
+  visual?: string | null;
   choices: string[];
   openedAt: number;
   closesAt: number;
+  /** False in an accuracy game: there is no countdown. */
+  timed?: boolean;
 }
 
 interface Result {
@@ -25,6 +28,11 @@ interface Result {
   score: number;
   rank: number;
   players: number;
+  /** Team games: the player's team, its place and its average score. */
+  team?: number;
+  teamRank?: number;
+  teamScore?: number;
+  teams?: number;
 }
 
 interface Final {
@@ -34,6 +42,9 @@ interface Final {
   correct: number;
   questions: number;
   top: { rank: number; name: string; score: number }[];
+  team?: number;
+  teamRank?: number;
+  teams?: number;
 }
 
 type View = "connecting" | "lobby" | "intro" | "question" | "answered" | "result" | "final" | "out";
@@ -60,6 +71,7 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, compact =
   const [message, setMessage] = useState<string | null>(null);
   const [title, setTitle] = useState(quizTitle ?? "");
   const [score, setScore] = useState(0);
+  const [team, setTeam] = useState(0);
   const [intro, setIntro] = useState<{ index: number; total: number; startsAt: number } | null>(null);
   const [question, setQuestion] = useState<Question | null>(null);
   const [chosen, setChosen] = useState<number | null>(null);
@@ -74,6 +86,7 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, compact =
         if (m.name) setShownName(String(m.name));
         setTitle(String(m.quizTitle ?? ""));
         setScore(Number(m.score ?? 0));
+        setTeam(Number(m.team ?? 0));
         if (m.question && !m.answered) {
           setQuestion(m.question as unknown as Question);
           setChosen(null);
@@ -158,6 +171,7 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, compact =
         {compact ? <span className="brand">{shownName}</span> : <OwnerBrandMark brand={brand} />}
         <span className="spacer" />
         {!compact && <span>{shownName}</span>}
+        {team > 0 && <TeamBadge team={team} />}
         <span className="status-pill">{score} pts</span>
         {status === "reconnecting" && <span className="status-pill">Reconnecting…</span>}
         {!compact && (
@@ -173,14 +187,19 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, compact =
         {view === "lobby" && (
           <div className="feedback neutral">
             You&apos;re in, {shownName}!<br />
+            {team > 0 && <div style={{ margin: "10px 0" }}><TeamBadge team={team} big /></div>}
             <span style={{ fontSize: 16, fontWeight: 400 }}>{title} · Look for your name on the big screen.</span>
           </div>
         )}
         {view === "intro" && intro && <IntroCountdown intro={intro} serverNow={serverNow} />}
         {view === "question" && question && (
           <>
-            <TimerBar openedAt={question.openedAt} closesAt={question.closesAt} serverNow={serverNow} />
-            {!compact && <div className="question-text" style={{ fontSize: 22 }}>{question.text}</div>}
+            {question.timed !== false && <TimerBar openedAt={question.openedAt} closesAt={question.closesAt} serverNow={serverNow} />}
+            {!compact && (
+              <div className="question-text" style={{ fontSize: 22 }}>
+                {question.visual && <span aria-hidden="true">{question.visual} </span>}{question.text}
+              </div>
+            )}
             <div className="answer-grid" style={compact ? { gridTemplateColumns: "1fr 1fr", gap: 6 } : undefined}>
               {question.choices.map((c, i) => (
                 <AnswerTile key={i} index={i} text={compact ? "" : c} onClick={() => answer(i)} />
@@ -200,6 +219,11 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, compact =
             <div style={{ fontSize: 16, fontWeight: 400 }}>
               You are {ordinal(result.rank)} of {result.players} · {result.score} points
             </div>
+            {result.team && result.teamRank && (
+              <div style={{ fontSize: 16, fontWeight: 400, marginTop: 6 }}>
+                <TeamBadge team={result.team} /> is {ordinal(result.teamRank)} of {result.teams} teams
+              </div>
+            )}
           </div>
         )}
         {view === "final" && final && (
@@ -208,6 +232,11 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, compact =
             <div style={{ fontSize: 18, fontWeight: 400 }}>
               {final.score} points · {final.correct} of {final.questions} correct
             </div>
+            {final.team && final.teamRank && (
+              <div style={{ fontSize: 18, fontWeight: 400, marginTop: 8 }}>
+                <TeamBadge team={final.team} /> finished {ordinal(final.teamRank)} of {final.teams} teams{final.teamRank === 1 ? " 🏆" : ""}
+              </div>
+            )}
           </div>
         )}
         {view === "out" && !message && <div className="feedback neutral">This game has ended.</div>}

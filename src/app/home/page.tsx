@@ -329,6 +329,7 @@ interface GameSummary {
   players: number;
   createdAt: string;
   requireSignIn: boolean;
+  mode: string;
 }
 
 function Games() {
@@ -352,7 +353,7 @@ function Games() {
         <tbody>
           {games.map((g) => (
             <tr key={g.gameId}>
-              <td>{g.quizTitle}</td>
+              <td>{g.quizTitle}{g.mode && g.mode !== "CLASSIC" && <> <span className="chip">{g.mode === "TEAM" ? "Team" : "Accuracy"}</span></>}</td>
               <td>{new Date(g.createdAt).toLocaleString()}</td>
               <td>{g.players}</td>
               <td>{g.requireSignIn ? "Signed-in students" + (g.classCode ? " of " + g.classCode : "") : "Anyone with the PIN"}</td>

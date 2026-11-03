@@ -736,3 +736,41 @@ input[type=email], input[type=tel], input[type=password], input[type=search] {
 .library-map { margin: 0; padding-left: 20px; display: grid; gap: 10px; }
 .library-map > li.removed { opacity: 0.6; }
 .library-map ul { margin: 6px 0 0; padding-left: 18px; font-size: 14px; display: grid; gap: 4px; }
+
+/* ---- Game modes ---- */
+/* Mode choice cards: the radio stays visible; only the border colour changes when chosen (no layout shift). */
+.mode-choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: 8px; }
+.mode-choice {
+  display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; align-items: start; cursor: pointer;
+  border: 2px solid var(--border); border-radius: var(--radius); padding: 10px 12px; background: var(--card);
+}
+.mode-choice:has(> input:checked) { border-color: var(--pc); background: var(--plc); }
+.mode-choice:has(> input:focus-visible) { outline: 3px solid var(--pc); outline-offset: 2px; }
+.mode-choice > input { margin-top: 3px; }
+.mode-choice > strong { grid-column: 2; }
+.mode-choice > span { grid-column: 2; font-size: 13px; color: var(--muted); }
+/* Team colours come from the school's theme, so the text colour is worked out against them. */
+.team-badge {
+  --team-bg: var(--a1);
+  display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 13px; font-weight: 700; white-space: nowrap;
+  background: var(--team-bg); color: #ffffff;
+}
+.team-badge.big { font-size: 22px; padding: 6px 18px; border-radius: 20px; }
+@supports (color: oklch(from red l c h)) {
+  .team-badge { --threshold: 0.623; --l: max(0, sign(var(--threshold) - l)); color: oklch(from var(--team-bg) var(--l) 0 h); }
+}
+@supports (color: contrast-color(red)) {
+  .team-badge { color: contrast-color(var(--team-bg)); }
+}
+.team-1 { --team-bg: var(--a1); }
+.team-2 { --team-bg: var(--a2); }
+.team-3 { --team-bg: var(--a3); }
+.team-4 { --team-bg: var(--a4); }
+.team-5 { --team-bg: var(--tc); }
+.team-6 { --team-bg: var(--success); }
+.team-standings { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.team-standings li { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: var(--radius); background: rgba(255, 255, 255, 0.1); font-size: 20px; }
+.team-standings li .spacer { flex: 1; }
+.question-visual-big { font-size: 64px; line-height: 1; display: block; text-align: center; margin-bottom: 8px; }
+/* On the dark classroom and phone screens a team whose colour is the school's dark colour still shows its pill. */
+.stage .team-badge { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9); }

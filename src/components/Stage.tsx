@@ -70,3 +70,15 @@ export function ordinal(n: number): string {
   const v = n % 100;
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
+
+/** A team in a team game: its colour (from the school's theme) and always its number, so colour is never the only cue. */
+export function TeamBadge({ team, big = false }: { team: number; big?: boolean }) {
+  return <span className={"team-badge team-" + team + (big ? " big" : "")}>Team {team}</span>;
+}
+
+/** The game modes a teacher can host, with the one-line description shown when choosing. */
+export const GAME_MODES: { value: "CLASSIC" | "TEAM" | "ACCURACY"; label: string; text: string }[] = [
+  { value: "CLASSIC", label: "Classic", text: "Everyone for themselves. Faster right answers earn more points." },
+  { value: "TEAM", label: "Team", text: "Players are put in even teams as they join. A team scores its members' average." },
+  { value: "ACCURACY", label: "Accuracy", text: "No timer and no rush: every right answer earns the same. You close each question." },
+];

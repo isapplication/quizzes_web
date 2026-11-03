@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AnswerTile, TimerBar, useCountdown } from "@/components/Stage";
+import { AnswerTile, GAME_MODES, TeamBadge, TimerBar, useCountdown } from "@/components/Stage";
 import { api } from "@/lib/api";
 import { connectLive, LiveConnection, LiveMessage, LiveStatus } from "@/lib/live";
 import { MeProvider, ownBrand, ShownBrand, useMe } from "@/lib/me";
@@ -26,6 +26,15 @@ interface Player {
   name: string;
   connected: boolean;
   score: number;
+  /** 1 to the team count in a team game; 0 otherwise. */
+  team: number;
+}
+
+interface TeamStanding {
+  rank: number;
+  team: number;
+  score: number;
+  members: number;
 }
 
 interface Ranked {
@@ -39,9 +48,12 @@ interface Question {
   index: number;
   total: number;
   text: string;
+  visual?: string | null;
   choices: string[];
   openedAt: number;
   closesAt: number;
+  /** False in an accuracy game: no countdown, the teacher closes the question. */
+  timed?: boolean;
 }
 
 interface Closed {
@@ -51,6 +63,7 @@ interface Closed {
   counts: number[];
   answered: number;
   leaderboard: Ranked[];
+  teams?: TeamStanding[];
   last: boolean;
 }
 
@@ -81,13 +94,17 @@ function HostScreen() {
   const [question, setQuestion] = useState<Question | null>(null);
   const [answered, setAnswered] = useState({ answered: 0, expected: 0 });
   const [closed, setClosed] = useState<Closed | null>(null);
-  const [podium, setPodium] = useState<{ top: Ranked[]; leaderboard: Ranked[] } | null>(null);
+  const [podium, setPodium] = useState<{ top: Ranked[]; leaderboard: Ranked[]; teams?: TeamStanding[] } | null>(null);
+  const [mode, setMode] = useState("CLASSIC");
+  const [teamCount, setTeamCount] = useState(0);
   const live = useRef<LiveConnection | null>(null);
   const serverNow = useCallback(() => live.current?.serverNow() ?? Date.now(), []);
 
   const onMessage = useCallback((m: LiveMessage) => {
     switch (m.type) {
       case "state": {
+        setMode(String(m.mode ?? "CLASSIC"));
+        setTeamCount(Number(m.teamCount ?? 0));
         setPlayers((m.players as Player[]) ?? []);
         setPlayerCount(Number(m.count ?? (m.players as Player[] | undefined)?.length ?? 0));
         const phase = String(m.phase);
@@ -99,13 +116,16 @@ function HostScreen() {
         }
         if ((phase === "RESULTS" || phase === "INTRO") && m.lastQuestion) {
           const lq = m.lastQuestion as Record<string, unknown>;
-          setQuestion({ index: Number(lq.index), total: Number(m.total), text: String(lq.text), choices: lq.choices as string[], openedAt: 0, closesAt: 0 });
+          setQuestion({ index: Number(lq.index), total: Number(m.total), text: String(lq.text), visual: (lq.visual as string) ?? null,
+            choices: lq.choices as string[], openedAt: 0, closesAt: 0 });
           setClosed({ index: Number(lq.index), correctIndex: Number(lq.correctIndex), explanation: (lq.explanation as string) ?? null,
-            counts: lq.counts as number[], answered: 0, leaderboard: (m.leaderboard as Ranked[]) ?? [], last: Number(lq.index) + 1 >= Number(m.total) });
+            counts: lq.counts as number[], answered: 0, leaderboard: (m.leaderboard as Ranked[]) ?? [],
+            teams: (m.teams as TeamStanding[]) ?? undefined, last: Number(lq.index) + 1 >= Number(m.total) });
           setView("results");
         }
         if (phase === "PODIUM") {
-          setPodium({ top: ((m.leaderboard as Ranked[]) ?? []).slice(0, 3), leaderboard: (m.leaderboard as Ranked[]) ?? [] });
+          setPodium({ top: ((m.leaderboard as Ranked[]) ?? []).slice(0, 3), leaderboard: (m.leaderboard as Ranked[]) ?? [],
+            teams: (m.teams as TeamStanding[]) ?? undefined });
           setView("podium");
         }
         break;
@@ -131,7 +151,7 @@ function HostScreen() {
         setView("results");
         break;
       case "podium":
-        setPodium({ top: (m.top as Ranked[]) ?? [], leaderboard: (m.leaderboard as Ranked[]) ?? [] });
+        setPodium({ top: (m.top as Ranked[]) ?? [], leaderboard: (m.leaderboard as Ranked[]) ?? [], teams: (m.teams as TeamStanding[]) ?? undefined });
         setView("podium");
         break;
       case "error":
@@ -205,6 +225,20 @@ function HostScreen() {
                 <div className="pin">{formatPin(game.pin)}</div>
               </div>
             </div>
+            <p style={{ textAlign: "center", margin: 0 }}>
+              {GAME_MODES.find((g) => g.value === mode)?.label ?? "Classic"} game
+              {mode === "TEAM" && <> · {teamCount} teams, filled as players join</>}
+              {mode === "ACCURACY" && <> · no timer: you close each question</>}
+            </p>
+            {mode === "TEAM" && teamCount > 0 && (
+              <div className="row" style={{ justifyContent: "center", gap: 8, flexWrap: "wrap" }}>
+                {Array.from({ length: teamCount }, (_, i) => i + 1).map((t) => (
+                  <span key={t} className="row" style={{ gap: 6 }}>
+                    <TeamBadge team={t} /> {players.filter((p) => p.team === t).length}
+                  </span>
+                ))}
+              </div>
+            )}
             <div className="row">
               <h2>{playerCount} {playerCount === 1 ? "player" : "players"}</h2>
               <span className="spacer" />
@@ -215,6 +249,7 @@ function HostScreen() {
             <div className="player-chips">
               {players.map((p) => (
                 <span key={p.id} className={"player-chip" + (p.connected ? "" : " away")}>
+                  {p.team > 0 && <TeamBadge team={p.team} />}
                   {p.name}
                   <button type="button" title={"Remove " + p.name} aria-label={"Remove " + p.name}
                     onClick={() => window.confirm(`Remove ${p.name} from the game?`) && send("kick", { playerId: p.id })}>
@@ -235,10 +270,13 @@ function HostScreen() {
             <div className="row">
               <span>Question {question.index + 1} of {question.total}</span>
               <span className="spacer" />
-              <Countdown closesAt={question.closesAt} serverNow={serverNow} />
-              <button className="btn btn-light" onClick={() => send("skip")}>Skip</button>
+              {question.timed !== false && <Countdown closesAt={question.closesAt} serverNow={serverNow} />}
+              {question.timed === false
+                ? <button className="btn btn-primary" style={{ fontSize: 20 }} onClick={() => send("skip")}>Close question</button>
+                : <button className="btn btn-light" onClick={() => send("skip")}>Skip</button>}
             </div>
-            <TimerBar openedAt={question.openedAt} closesAt={question.closesAt} serverNow={serverNow} />
+            {question.timed !== false && <TimerBar openedAt={question.openedAt} closesAt={question.closesAt} serverNow={serverNow} />}
+            {question.visual && <span className="question-visual-big" aria-hidden="true">{question.visual}</span>}
             <div className="question-text">{question.text}</div>
             <div className="row" style={{ justifyContent: "center" }}>
               <div className="big-number">{answered.answered}</div>
@@ -269,9 +307,10 @@ function HostScreen() {
               ))}
             </div>
             {closed.explanation && <div className="card">{closed.explanation}</div>}
+            {closed.teams && closed.teams.length > 0 && <TeamStandings teams={closed.teams} title="Teams" />}
             {closed.leaderboard.length > 0 && (
               <div>
-                <h2 style={{ marginBottom: 10 }}>Leaderboard</h2>
+                <h2 style={{ marginBottom: 10 }}>{closed.teams && closed.teams.length > 0 ? "Top players" : "Leaderboard"}</h2>
                 <ol className="leaderboard">
                   {closed.leaderboard.map((r) => (
                     <li key={r.id}><span>{r.rank}. {r.name}</span><span>{r.score}</span></li>
@@ -285,6 +324,11 @@ function HostScreen() {
         {view === "podium" && podium && (
           <>
             <h1 style={{ textAlign: "center" }}>Podium</h1>
+            {podium.teams && podium.teams.length > 0 && (
+              <div style={{ maxWidth: 700, margin: "0 auto", width: "100%" }}>
+                <TeamStandings teams={podium.teams} title={"Team " + podium.teams[0].team + " wins!"} />
+              </div>
+            )}
             <div className="podium">
               {[1, 0, 2].map((i) => podium.top[i] && (
                 <div key={podium.top[i].id}>
@@ -305,6 +349,26 @@ function HostScreen() {
           </>
         )}
       </main>
+    </div>
+  );
+}
+
+/** Teams in order of their average score; each row shows the team's badge, so colour is never the only cue. */
+function TeamStandings({ teams, title }: { teams: TeamStanding[]; title: string }) {
+  return (
+    <div>
+      <h2 style={{ marginBottom: 10 }}>{title}</h2>
+      <ol className="team-standings">
+        {teams.map((t) => (
+          <li key={t.team}>
+            <span>{t.rank}.</span>
+            <TeamBadge team={t.team} big />
+            <span className="muted" style={{ color: "inherit", opacity: 0.8, fontSize: 16 }}>{t.members} {t.members === 1 ? "player" : "players"}</span>
+            <span className="spacer" />
+            <span>{t.score} <span style={{ fontSize: 14 }}>average</span></span>
+          </li>
+        ))}
+      </ol>
     </div>
   );
 }
