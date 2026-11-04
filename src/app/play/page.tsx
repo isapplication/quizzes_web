@@ -12,6 +12,8 @@ import { GameLook } from "@/components/live/GameLook";
 import { Buddy } from "@/components/live/LookArt";
 import { JoinHero } from "@/components/live/GameBits";
 import { unlockGameSound } from "@/lib/gameSound";
+import { suggestNickname } from "@/lib/nicknames";
+import { PatternPad } from "@/components/live/JoinExtras";
 
 interface Joined {
   gameId: string;
@@ -36,6 +38,8 @@ interface JoinInfo {
   signInUrl: string | null;
   /** The game's look (0 to 12), so the join page already looks like the game. */
   lookGrade: number | null;
+  /** A guest must also tap the four-shape pattern from the classroom screen. */
+  roomCheck?: boolean;
 }
 
 /** A refreshed tab goes back into its game (the ticket lasts the lesson); one game per tab. */
@@ -82,6 +86,7 @@ function Play() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [backUrl, setBackUrl] = useState<string | null>(null);
+  const [pattern, setPattern] = useState<number[]>([]);
   const autoJoined = useRef(false);
   // The join page takes the hosting school's colours as soon as the PIN is known.
   useOwnerBrand(info?.brand);
@@ -115,11 +120,15 @@ function Play() {
     setBusy(true);
     setError(null);
     try {
-      const j = await api<Joined>("/api/v1/live/join", { method: "POST", body: { pin: info.pin, nickname } });
+      const j = await api<Joined>("/api/v1/live/join", {
+        method: "POST", body: { pin: info.pin, nickname, pattern: info.roomCheck ? pattern : null },
+      });
       save(j);
       setJoined(j);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Quizplayo could not join you to the game. Please try again.");
+      // A wrong pattern: start again from an empty pad (the screen may also show a new one by now).
+      if (e instanceof ApiError && e.code === "wrong_room_pattern") setPattern([]);
     } finally {
       setBusy(false);
     }
@@ -196,8 +205,13 @@ function Play() {
                            onChange={(e) => { setNickname(e.target.value); setError(null); }} placeholder="e.g. Sam"
                            aria-describedby="nickname-hint" />
                     <span id="nickname-hint" className="hint">2 to 20 characters. Everyone in the game sees it.</span>
+                    <button type="button" className="gl-quiet" onClick={() => { setNickname(suggestNickname()); setError(null); }}>
+                      Suggest a name
+                    </button>
                   </div>
-                  <button className="gl-btn gl-btn-big" type="submit" disabled={busy || nickname.trim().length < 2}>
+                  {info.roomCheck && <PatternPad value={pattern} onChange={(update) => { setPattern(update); setError(null); }} />}
+                  <button className="gl-btn gl-btn-big" type="submit"
+                          disabled={busy || nickname.trim().length < 2 || (!!info.roomCheck && pattern.length < 4)}>
                     {busy ? "Joining…" : "Join the game"}
                   </button>
                 </form>

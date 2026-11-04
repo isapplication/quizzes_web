@@ -14,6 +14,7 @@ import { connectLive, LiveConnection, LiveMessage, LiveStatus } from "@/lib/live
 import { MeProvider, ownBrand, ShownBrand, useMe } from "@/lib/me";
 import { formatPin } from "@/lib/pin";
 import { OwnerBrandMark, useOwnerBrand } from "@/components/OwnerBrand";
+import { JoinQr, RoomPatternCard } from "@/components/live/JoinExtras";
 
 interface Hosted {
   gameId: string;
@@ -26,6 +27,8 @@ interface Hosted {
   brand: ShownBrand;
   /** The grade (0 to 12) whose game look the screens use; null for a game from before game looks. */
   lookGrade: number | null;
+  /** Players must tap the pattern on this screen to join with the PIN. */
+  roomCheck?: boolean;
 }
 
 interface Player {
@@ -257,6 +260,10 @@ function HostScreen() {
                 <div className="lbl">Game PIN</div>
                 <div className="gl-pin" aria-label={"Game PIN " + game.pin.split("").join(" ")}>{formatPin(game.pin)}</div>
               </div>
+              <div className="gl-card gl-qr-card" style={{ "--i": 2 } as CSSProperties}>
+                <JoinQr url={window.location.origin + "/play?pin=" + game.pin} pin={game.pin} />
+              </div>
+              {game.roomCheck && <RoomPatternCard pin={game.pin} />}
               <Buddy grade={look} className="gl-buddy-lobby" />
             </div>
             <p style={{ textAlign: "center", margin: 0 }}>

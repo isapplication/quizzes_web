@@ -25,6 +25,8 @@ export function HostGame({ target, playable, total, grade }: { target: HostTarge
   const [teams, setTeams] = useState(2);
   const looks = lookChoices(grade);
   const [look, setLook] = useState(looks[0].value);
+  const [shuffle, setShuffle] = useState(false);
+  const [roomCheck, setRoomCheck] = useState(false);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const skipped = total - playable;
@@ -41,7 +43,8 @@ export function HostGame({ target, playable, total, grade }: { target: HostTarge
         method: "POST",
         body: {
           ...target, requireSignIn: signedInOnly, classCode: signedInOnly ? classCode || null : null,
-          mode, teamCount: mode === "TEAM" ? teams : null, lookGrade: look,
+          mode, teamCount: mode === "TEAM" ? teams : null, lookGrade: look, shuffle,
+          roomCheck: !signedInOnly && roomCheck,
         },
       });
       router.push("/teacher/host/" + game.pin);
@@ -85,6 +88,16 @@ export function HostGame({ target, playable, total, grade }: { target: HostTarge
         </select>
         <span id="game-look-hint" className="muted">The screens&apos; pictures, fonts and motion suit this grade, in your school&apos;s colours.</span>
       </div>
+      <label className="check">
+        <input type="checkbox" checked={shuffle} onChange={(e) => setShuffle(e.target.checked)} />
+        <span>Shuffle questions and answers <span className="muted">(the same order for every player)</span></span>
+      </label>
+      {!signedInOnly && (
+        <label className="check">
+          <input type="checkbox" checked={roomCheck} onChange={(e) => setRoomCheck(e.target.checked)} />
+          <span>Players must be in the room <span className="muted">(they also tap a pattern from your screen, so a shared PIN is not enough)</span></span>
+        </label>
+      )}
       {school && (
         <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0, gap: 8 }}>
           <legend style={{ fontWeight: 600, marginBottom: 6 }}>Who can join?</legend>

@@ -251,6 +251,17 @@
 .gl-chips { display: flex; flex-wrap: wrap; gap: clamp(8px, 1cqi, 20px); justify-content: center; align-content: flex-start; font-size: clamp(16px, 1.7cqi, 34px); list-style: none; margin: 0; padding: 0; }
 .gl-chip { display: inline-flex; align-items: center; gap: 0.4em; padding: 0.35em 0.9em; border-radius: 999px; background: var(--card); color: var(--sc); font-weight: 700; box-shadow: 0 3px 0 color-mix(in oklab, var(--sc) 15%, transparent); }
 .gl-chip.away { opacity: 0.55; }
+/* Joining (Wave 1a): the QR code, the room pattern on the classroom screen, and the pad players tap it into. */
+.gl-qr-card { display: grid; place-items: center; padding: 10px; }
+.gl-qr { display: block; width: clamp(110px, 12cqi, 200px); height: auto; image-rendering: pixelated; background: #fff; border-radius: 6px; }
+.gl-room { text-align: center; }
+.gl-room-shapes { display: flex; gap: 0.5em; justify-content: center; margin-top: 0.4em; }
+.gl-pattern-entered { display: flex; gap: 8px; justify-content: center; min-height: 40px; margin: 6px 0; }
+.gl-pattern-slot { width: 36px; height: 36px; border-radius: 8px; border: 2px dashed currentColor; display: grid; place-items: center; opacity: 0.8; }
+.gl-pattern-pad { display: grid; grid-template-columns: repeat(4, minmax(44px, 1fr)); gap: 8px; }
+.gl-pattern-key { min-height: 56px; border-radius: 10px; border: 0; background: var(--card); box-shadow: 0 2px 0 color-mix(in oklab, var(--sc) 20%, transparent); display: grid; place-items: center; cursor: pointer; }
+.gl-pattern-key:disabled { opacity: 0.5; cursor: default; }
+.gl-pattern-key:focus-visible { outline: 3px solid var(--sc); outline-offset: 2px; }
 /* A player who joined with the PIN and a nickname: text, not colour alone, tells the teacher. */
 .gl-guest { font-size: 0.65em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; padding: 0.1em 0.5em; border-radius: 999px; border: 1px solid currentColor; opacity: 0.8; }
 .gl-chip button { border: 0; background: transparent; color: var(--danger); cursor: pointer; font: inherit; font-weight: 800; padding: 0 0.1em; }
