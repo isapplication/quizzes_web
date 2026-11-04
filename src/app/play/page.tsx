@@ -10,6 +10,8 @@ import { formatPin, normalizePin } from "@/lib/pin";
 import { OwnerBrandMark, useOwnerBrand } from "@/components/OwnerBrand";
 import { GameLook } from "@/components/live/GameLook";
 import { Buddy } from "@/components/live/LookArt";
+import { JoinHero } from "@/components/live/GameBits";
+import { unlockGameSound } from "@/lib/gameSound";
 
 interface Joined {
   gameId: string;
@@ -106,6 +108,8 @@ function Play() {
 
   async function join() {
     if (!info) return;
+    // The join tap is the gesture that lets the game play sound on this phone.
+    unlockGameSound();
     setBusy(true);
     setError(null);
     try {
@@ -140,8 +144,8 @@ function Play() {
         <div className="gl-center gl-in">
           {!info ? (
             <>
-              <h1 className="gl-wordmark">Join a game</h1>
-              <form className="gl-form" onSubmit={(e) => { e.preventDefault(); lookUp(pin); }}>
+              <JoinHero title="Join a game" subtitle="Enter the PIN on your teacher's screen. No account needed." />
+              <form className="gl-card gl-join-card gl-form" onSubmit={(e) => { e.preventDefault(); lookUp(pin); }}>
                 <div className="gl-field">
                   <label htmlFor="pin">Game PIN</label>
                   <input id="pin" type="text" inputMode="numeric" autoComplete="off" value={pin} autoFocus
@@ -153,13 +157,10 @@ function Play() {
             </>
           ) : (
             <>
+              <JoinHero brand={info.brand} title={info.quizTitle} subtitle={`${info.workspaceName} · PIN ${formatPin(info.pin)}`} />
               <Buddy grade={info.lookGrade} />
-              <div>
-                <p className="gl-sub" style={{ margin: 0 }}>{info.workspaceName} · PIN {formatPin(info.pin)}</p>
-                <h1 className="gl-big" style={{ marginTop: 4 }}>{info.quizTitle}</h1>
-              </div>
               {info.joinAs === "SIGNED_IN" && (
-                <div className="gl-form">
+                <div className="gl-card gl-join-card gl-form">
                   <p style={{ margin: 0 }}>You&apos;re playing as <strong>{info.name}</strong>: your result is saved.</p>
                   <button className="gl-btn gl-btn-big" type="button" disabled={busy} onClick={join}>
                     {busy ? "Joining…" : "Join the game"}
@@ -167,7 +168,7 @@ function Play() {
                 </div>
               )}
               {info.joinAs === "GUEST" && (
-                <form className="gl-form" onSubmit={(e) => { e.preventDefault(); join(); }}>
+                <form className="gl-card gl-join-card gl-form" onSubmit={(e) => { e.preventDefault(); join(); }}>
                   <div className="gl-field">
                     <label htmlFor="nickname">Your nickname</label>
                     <input id="nickname" type="text" autoComplete="nickname" value={nickname} maxLength={20} autoFocus

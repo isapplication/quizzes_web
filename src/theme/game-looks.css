@@ -85,7 +85,8 @@
 
 /* ---------- The screen ---------- */
 .gl {
-  position: relative; isolation: isolate; overflow: hidden; min-height: 100dvh; display: flex; flex-direction: column;
+  /* clip, not hidden: a hidden box can still be scrolled sideways (falling confetti did that on phones). */
+  position: relative; isolation: isolate; overflow: clip; min-height: 100dvh; display: flex; flex-direction: column;
   background: var(--stage-bg); color: var(--stage-ink); font-family: var(--font-text);
 }
 .gl h1, .gl h2, .gl h3 { color: inherit; margin: 0; }
@@ -321,6 +322,41 @@
 .gl-compact .gl-result { padding: 8px; }
 .gl-compact .gl-result-icon { width: 36px; height: 36px; font-size: 20px; }
 
+/* ---------- Join page hero, player badge, waiting states ---------- */
+.gl-hero { position: relative; display: grid; justify-items: center; gap: 8px; text-align: center; padding: 8px 24px 4px; width: 100%; }
+.gl-hero-mark { display: inline-flex; flex-direction: column; align-items: center; gap: 8px; }
+.gl-hero-mark svg { filter: drop-shadow(0 8px 16px color-mix(in oklab, var(--pc) 35%, transparent)); }
+.gl-hero-word { font-family: var(--font-display); font-size: 34px; color: var(--stage-ink); }
+.gl-hero-logo { max-height: 76px; max-width: 240px; object-fit: contain; background: var(--card); border-radius: 14px; padding: 8px 14px; box-shadow: 0 6px 18px color-mix(in oklab, var(--sc) 14%, transparent); }
+.gl-hero-name { font-family: var(--font-display); font-weight: var(--display-weight); font-size: 24px; }
+.gl-hero-title { font-family: var(--font-display); font-weight: var(--display-weight); font-size: 30px; line-height: 1.15; margin: 4px 0 0; text-wrap: balance; }
+.gl-hero-sub { margin: 0; opacity: 0.85; text-wrap: balance; }
+.gl-hero-shapes { position: absolute; inset: 0; pointer-events: none; z-index: -1; }
+.gl-hero-shapes span { position: absolute; opacity: 0.9; }
+.gl-hero-shapes .s0 { top: 4%; left: 4%; rotate: -14deg; }
+.gl-hero-shapes .s1 { top: 0; right: 6%; rotate: 12deg; }
+.gl-hero-shapes .s2 { top: 46%; left: 0; rotate: 8deg; }
+.gl-hero-shapes .s3 { top: 44%; right: 0; rotate: -10deg; }
+.gl-hero + .gl-buddy { width: 96px; }
+.gl-join-card { padding: 18px 16px; }
+.gl-join-card.gl-form { max-width: 420px; }
+.gl[data-band="h912"] .gl-join-card { background: var(--card); box-shadow: 0 10px 30px color-mix(in oklab, var(--sc) 10%, transparent); }
+
+.gl-badge { position: relative; display: inline-grid; place-items: center; width: var(--s); height: var(--s); flex: none; }
+.gl-badge svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.gl-badge-initial { position: relative; translate: 0 6%; font-family: var(--font-display); font-weight: 800; font-size: calc(var(--s) * 0.38); color: #ffffff; }
+@supports (color: oklch(from red l c h)) {
+  .gl-badge-initial { --l: max(0, sign(0.68 - l)); color: oklch(from var(--bg) var(--l) 0 h); }
+}
+.gl-name { font-size: 34px; overflow-wrap: anywhere; }
+.gl-waiting { display: grid; gap: 4px; padding: 14px 16px; width: 100%; text-align: center; }
+.gl-waiting-title { font-family: var(--font-display); font-weight: var(--display-weight); font-size: 18px; }
+.gl-chosen { display: grid; justify-items: center; gap: 6px; padding: 12px 18px; }
+.gl-chosen .gl-answer { font-size: 20px; }
+.gl-chosen .gl-answer svg { width: 28px; height: 28px; }
+.gl-sound { gap: 0.35em; padding: 0.3em 0.7em; }
+.gl-dots i { font-style: normal; }
+
 /* ---------- Characters and confetti ---------- */
 .gl-buddy { display: block; height: auto; }
 .gl-buddy .gl-mouth-sad, .gl-buddy .gl-tear { display: none; }
@@ -354,6 +390,13 @@
   .gl-confetti { display: block; }
   .gl-confetti i { animation: gl-fall var(--t, 3s) linear var(--d, 0s) infinite; }
   .gl-tile:not(:disabled):hover { translate: 0 -2px; }
+  .gl-hero-shapes span { animation: gl-float 6s ease-in-out infinite; }
+  .gl-hero-shapes .s1 { animation-delay: -1.5s; }
+  .gl-hero-shapes .s2 { animation-delay: -3s; }
+  .gl-hero-shapes .s3 { animation-delay: -4.5s; }
+  .gl-dots i { animation: gl-blink 1.4s infinite both; }
+  .gl-dots i:nth-child(2) { animation-delay: 0.2s; }
+  .gl-dots i:nth-child(3) { animation-delay: 0.4s; }
 }
 @media (prefers-reduced-motion: reduce) {
   .gl-in > * { animation: gl-fade 240ms ease both; }
@@ -362,6 +405,7 @@
 @keyframes gl-snap { from { opacity: 0; scale: 1.08; } }
 @keyframes gl-rise { from { opacity: 0; translate: 0 8px; } }
 @keyframes gl-fade { from { opacity: 0; } }
+@keyframes gl-blink { 0%, 80%, 100% { opacity: 0.2; } 40% { opacity: 1; } }
 @keyframes gl-bob { 50% { translate: 0 -6%; } }
 @keyframes gl-hop { 40% { translate: 0 -18%; scale: 1.05; } }
 @keyframes gl-float { 50% { translate: 0 -10px; } }

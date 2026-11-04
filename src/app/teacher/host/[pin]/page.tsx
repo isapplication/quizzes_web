@@ -6,6 +6,7 @@ import { type CSSProperties, useCallback, useEffect, useRef, useState } from "re
 import { GAME_MODES, GameTile, GameTimer, TeamBadge, useCountdown } from "@/components/Stage";
 import { GameLook } from "@/components/live/GameLook";
 import { Buddy, Confetti } from "@/components/live/LookArt";
+import { LastSecondsTicks, PlayerBadge, SoundToggle } from "@/components/live/GameBits";
 import { lookBand, lookWords, type Band } from "@/lib/gameLook";
 import { lobbyLength, useGameSound } from "@/lib/gameSound";
 import { api } from "@/lib/api";
@@ -227,9 +228,7 @@ function HostScreen() {
         <span className="gl-spacer" />
         {game && <span className="gl-pill">{game.quizTitle}{game.classCode && <> · Class {game.classCode}</>}</span>}
         <span className="gl-pill" role="status">{status === "connected" ? "● Live" : status === "reconnecting" ? "Reconnecting…" : status}</span>
-        <button type="button" className="gl-quiet" onClick={toggle} aria-pressed={muted}>
-          {muted ? "🔇 Sound off" : "🔊 Sound on"}
-        </button>
+        <SoundToggle muted={muted} onToggle={toggle} />
         {view !== "podium" && view !== "lobby" && (
           <button type="button" className="gl-quiet" onClick={() => window.confirm("End the game now and show the podium?") && send("end")}>
             End game
@@ -273,7 +272,7 @@ function HostScreen() {
               </div>
             )}
             <div className="gl-row">
-              <span className="gl-pill">👥 {playerCount} {playerCount === 1 ? "player" : "players"}</span>
+              <span className="gl-pill">{playerCount} {playerCount === 1 ? "player" : "players"}</span>
               <span className="gl-spacer" />
               <button type="button" className="gl-btn gl-btn-big" disabled={playerCount === 0} onClick={() => send("start")}>
                 Start game
@@ -282,6 +281,7 @@ function HostScreen() {
             <ul className="gl-chips gl-in" aria-label="Players">
               {players.map((p, i) => (
                 <li key={p.id} className={"gl-chip" + (p.connected ? "" : " away")} style={{ "--i": Math.min(i, 20) } as CSSProperties}>
+                  <PlayerBadge name={p.name} size={26} />
                   {p.team > 0 && <TeamBadge team={p.team} />}
                   {p.name}
                   <button type="button" title={"Remove " + p.name} aria-label={"Remove " + p.name}
@@ -314,7 +314,7 @@ function HostScreen() {
             {question.timed !== false && band === "h912" && (
               <GameTimer band={band} openedAt={question.openedAt} closesAt={question.closesAt} serverNow={serverNow} />
             )}
-            {question.timed !== false && <Ticks closesAt={question.closesAt} serverNow={serverNow} tick={() => sound("tick")} />}
+            {question.timed !== false && <LastSecondsTicks until={question.closesAt} serverNow={serverNow} tick={() => sound("tick")} />}
             <div className="gl-q-row gl-in">
               <h1 className="gl-card gl-q">
                 {question.visual && <span className="gl-visual" aria-hidden="true">{question.visual}</span>}{question.text}
@@ -448,13 +448,4 @@ function Intro({ intro, serverNow, grade }: { intro: { index: number; total: num
       <Buddy grade={grade} className="gl-buddy-side" />
     </div>
   );
-}
-
-/** A tick each second for the last five seconds of a question. */
-function Ticks({ closesAt, serverNow, tick }: { closesAt: number; serverNow: () => number; tick: () => void }) {
-  const left = useCountdown(closesAt, serverNow);
-  useEffect(() => {
-    if (left > 0 && left <= 5) tick();
-  }, [left]); // eslint-disable-line react-hooks/exhaustive-deps
-  return null;
 }

@@ -5,7 +5,9 @@ import { GameTile, GameTimer, ordinal, TeamBadge, useCountdown } from "./Stage";
 import { AnswerShape } from "./AnswerShape";
 import { GameLook } from "@/components/live/GameLook";
 import { Buddy, Confetti } from "@/components/live/LookArt";
+import { LastSecondsTicks, PlayerBadge, SoundToggle } from "@/components/live/GameBits";
 import { lookBand, lookWords } from "@/lib/gameLook";
+import { type GameSoundName, useGameSound } from "@/lib/gameSound";
 import { connectLive, LiveConnection, LiveMessage, LiveStatus } from "@/lib/live";
 import { OwnerBrandMark, useOwnerBrand } from "@/components/OwnerBrand";
 import type { ShownBrand } from "@/lib/me";
@@ -87,6 +89,9 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
   const [correctIndex, setCorrectIndex] = useState<number | null>(null);
   const band = lookBand(lookGrade);
   const words = lookWords(band);
+  const { sound: playSound, buzz, muted, toggle } = useGameSound(band);
+  // The class simulator shows many players on one screen: they stay silent.
+  const sound = useCallback((name: GameSoundName) => { if (!compact) playSound(name); }, [compact, playSound]);
   const live = useRef<LiveConnection | null>(null);
   const serverNow = useCallback(() => live.current?.serverNow() ?? Date.now(), []);
 
@@ -131,6 +136,7 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
         break;
       case "final":
         setFinal(m as unknown as Final);
+        setScore(Number(m.score ?? 0));
         setView("final");
         break;
       case "kicked":
@@ -171,8 +177,19 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
     };
   }, [url, pin, ticket, onMessage]);
 
+  // Each player's own sounds: joining, their answer's result, and how they finished.
+  useEffect(() => {
+    if (view === "lobby") sound("joined");
+    if (view === "result" && result) {
+      sound(result.correct ? "correct" : "wrong");
+      if (!compact) buzz(result.correct ? 60 : [40, 60, 40]);
+    }
+    if (view === "final" && final) sound(final.rank <= 3 ? "fanfare" : "joined");
+  }, [view]); // eslint-disable-line react-hooks/exhaustive-deps
+
   function answer(i: number) {
     if (!question || chosen !== null) return;
+    sound("tap");
     setChosen(i);
     setMessage(null);
     live.current?.send({ type: "answer", index: question.index, choice: i });
@@ -191,6 +208,7 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
         {team > 0 && <TeamBadge team={team} />}
         <span className="gl-pill">{score.toLocaleString()} pts</span>
         {status === "reconnecting" && <span className="gl-pill" role="status">Reconnecting…</span>}
+        {!compact && <SoundToggle muted={muted} onToggle={toggle} compact />}
         {!compact && (
           <a className="gl-quiet" href="/home"
              onClick={(e) => { if (!window.confirm("Leave this game? Your score so far is kept.")) e.preventDefault(); }}>
@@ -198,24 +216,32 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
           </a>
         )}
       </header>
+      {view === "final" && final && final.rank <= 3 && <Confetti band={band} />}
       <main className="gl-main">
         {message && <div className="gl-alert" role="alert">{message}</div>}
         {view === "connecting" && <div className="gl-center"><p className="gl-sub">Joining game {pin}…</p></div>}
         {view === "lobby" && (
           <div className="gl-center gl-in">
-            <Buddy grade={lookGrade} />
-            <div className="gl-big">You&apos;re in, {shownName}!</div>
+            {lookGrade !== null && lookGrade <= 5 ? <Buddy grade={lookGrade} /> : <PlayerBadge name={shownName} size={96} />}
+            <div>
+              <div className="gl-sub">You&apos;re in!</div>
+              <div className="gl-big gl-name">{shownName}</div>
+            </div>
             {team > 0 && <TeamBadge team={team} big />}
-            <div className="gl-sub">{title}<br />Look for your name on the big screen.</div>
+            <div className="gl-card gl-waiting">
+              <span className="gl-waiting-title">{title}</span>
+              <span>Look for your name on the big screen. The game starts soon<span className="gl-dots" aria-hidden="true"><i>.</i><i>.</i><i>.</i></span></span>
+            </div>
           </div>
         )}
-        {view === "intro" && intro && <IntroCountdown intro={intro} serverNow={serverNow} />}
+        {view === "intro" && intro && <IntroCountdown intro={intro} serverNow={serverNow} tick={() => sound("tick")} />}
         {view === "question" && question && (
           <>
             <div className="gl-row" style={{ justifyContent: "space-between" }}>
               <span className="gl-pill">{question.index + 1} of {question.total}</span>
               {question.timed !== false && <GameTimer band={band} openedAt={question.openedAt} closesAt={question.closesAt} serverNow={serverNow} />}
             </div>
+            {question.timed !== false && !compact && <LastSecondsTicks until={question.closesAt} serverNow={serverNow} tick={() => sound("tick")} />}
             {!compact && (
               <h1 className="gl-card gl-q">
                 {question.visual && <span className="gl-visual" aria-hidden="true">{question.visual}</span>}{question.text}
@@ -230,7 +256,13 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
           <div className="gl-center gl-in">
             <Buddy grade={lookGrade} />
             <div className="gl-big">Answer in!</div>
-            <div className="gl-sub">Waiting for the others…</div>
+            {question && chosen !== null && (
+              <div className="gl-card gl-chosen">
+                <span className="gl-sub">Your answer</span>
+                <span className="gl-answer"><AnswerShape index={chosen} color={`var(--a${(chosen % 4) + 1})`} />{question.choices[chosen]}</span>
+              </div>
+            )}
+            <div className="gl-sub">Waiting for the others<span className="gl-dots" aria-hidden="true"><i>.</i><i>.</i><i>.</i></span></div>
           </div>
         )}
         {view === "result" && result && (
@@ -262,7 +294,6 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
         )}
         {view === "final" && final && (
           <div className="gl-center gl-in">
-            {final.rank <= 3 && <Confetti band={band} />}
             <Buddy grade={lookGrade} mood="happy" />
             <div className="gl-sub">You finished</div>
             <div className="gl-place">{ordinal(final.rank)}</div>
@@ -281,8 +312,15 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
   );
 }
 
-function IntroCountdown({ intro, serverNow }: { intro: { index: number; total: number; startsAt: number }; serverNow: () => number }) {
+function IntroCountdown({ intro, serverNow, tick }: {
+  intro: { index: number; total: number; startsAt: number };
+  serverNow: () => number;
+  tick: () => void;
+}) {
   const left = useCountdown(intro.startsAt, serverNow);
+  useEffect(() => {
+    if (left > 0) tick();
+  }, [left]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div className="gl-intro gl-in">
       <h2>Question {intro.index + 1} of {intro.total}</h2>
