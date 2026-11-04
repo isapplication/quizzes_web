@@ -59,7 +59,7 @@ type View = "connecting" | "lobby" | "intro" | "question" | "answered" | "result
  * A student's device in a live game. The question and options come from the server without the key;
  * after the question closes the server says whether the answer was right and how many points it earned.
  */
-export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade = null, compact = false }: {
+export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade = null, compact = false, backUrl = null }: {
   url: string;
   pin: string;
   ticket: string;
@@ -70,6 +70,8 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
   /** The grade (0 to 12) whose game look this game uses; null shows the default look. */
   lookGrade?: number | null;
   compact?: boolean;
+  /** For a student who came from their school's own system: their dashboard there, offered when the game ends. */
+  backUrl?: string | null;
 }) {
   useOwnerBrand(brand);
   // The game server may add a number to a guest's nickname to keep names different ("Sam 2").
@@ -304,9 +306,15 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
                 <TeamBadge team={final.team} /> finished {ordinal(final.teamRank)} of {final.teams} teams{final.teamRank === 1 ? " 🏆" : ""}
               </div>
             )}
+            {backUrl && <a className="gl-btn gl-btn-big" href={backUrl}>Back to my dashboard</a>}
           </div>
         )}
-        {view === "out" && !message && <div className="gl-center"><div className="gl-big">This game has ended.</div></div>}
+        {view === "out" && !message && (
+          <div className="gl-center">
+            <div className="gl-big">This game has ended.</div>
+            {backUrl && <a className="gl-btn gl-btn-big" href={backUrl}>Back to my dashboard</a>}
+          </div>
+        )}
       </main>
     </GameLook>
   );

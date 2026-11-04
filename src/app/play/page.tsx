@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { PlayerGame } from "@/components/PlayerGame";
 import { api, ApiError } from "@/lib/api";
 import type { ShownBrand } from "@/lib/me";
@@ -81,6 +81,8 @@ function Play() {
   const [joined, setJoined] = useState<Joined | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [backUrl, setBackUrl] = useState<string | null>(null);
+  const autoJoined = useRef(false);
   // The join page takes the hosting school's colours as soon as the PIN is known.
   useOwnerBrand(info?.brand);
 
@@ -126,11 +128,22 @@ function Play() {
   useEffect(() => {
     const p = params.get("pin");
     if (p) lookUp(p);
+    // Someone who came from their school's own system goes back to their dashboard there at the end.
+    api<{ schoolSystemUrl: string | null }>("/api/v1/me").then((m) => setBackUrl(m.schoolSystemUrl)).catch(() => undefined);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ?auto=1 (the "Join" in a student's school system): a signed-in student of the game's school joins at once.
+  useEffect(() => {
+    if (info?.joinAs === "SIGNED_IN" && params.get("auto") === "1" && !autoJoined.current) {
+      autoJoined.current = true;
+      join();
+    }
+  }, [info]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (joined) {
     return <PlayerGame url={joined.cometdUrl} pin={joined.pin} ticket={joined.ticket} name={joined.name}
-                       quizTitle={joined.quizTitle} brand={joined.brand} lookGrade={joined.lookGrade} />;
+                       quizTitle={joined.quizTitle} brand={joined.brand} lookGrade={joined.lookGrade}
+                       backUrl={joined.guest ? null : backUrl} />;
   }
 
   return (
@@ -165,6 +178,14 @@ function Play() {
                   <button className="gl-btn gl-btn-big" type="button" disabled={busy} onClick={join}>
                     {busy ? "Joining…" : "Join the game"}
                   </button>
+                </div>
+              )}
+              {info.joinAs === "GUEST" && info.signInUrl && (
+                <div className="gl-form">
+                  <a className="gl-btn gl-btn-big" href={info.signInUrl}>Sign in through your school</a>
+                  <p className="gl-sub" style={{ margin: 0, textAlign: "center" }}>
+                    A student of {info.workspaceName}? Sign in to play as yourself and keep your result. Or join with a nickname:
+                  </p>
                 </div>
               )}
               {info.joinAs === "GUEST" && (

@@ -251,6 +251,8 @@
 .gl-chips { display: flex; flex-wrap: wrap; gap: clamp(8px, 1cqi, 20px); justify-content: center; align-content: flex-start; font-size: clamp(16px, 1.7cqi, 34px); list-style: none; margin: 0; padding: 0; }
 .gl-chip { display: inline-flex; align-items: center; gap: 0.4em; padding: 0.35em 0.9em; border-radius: 999px; background: var(--card); color: var(--sc); font-weight: 700; box-shadow: 0 3px 0 color-mix(in oklab, var(--sc) 15%, transparent); }
 .gl-chip.away { opacity: 0.55; }
+/* A player who joined with the PIN and a nickname: text, not colour alone, tells the teacher. */
+.gl-guest { font-size: 0.65em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; padding: 0.1em 0.5em; border-radius: 999px; border: 1px solid currentColor; opacity: 0.8; }
 .gl-chip button { border: 0; background: transparent; color: var(--danger); cursor: pointer; font: inherit; font-weight: 800; padding: 0 0.1em; }
 .gl[data-band="m68"] .gl-chip { border-radius: 4px; background: rgb(255 255 255 / 0.08); color: #ffffff; border: 1px solid color-mix(in oklab, var(--g1) 60%, transparent); box-shadow: none; font-family: var(--font-display); }
 .gl[data-band="m68"] .gl-chip button { color: var(--g4, var(--danger)); }

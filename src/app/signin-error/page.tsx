@@ -18,6 +18,10 @@ const MESSAGES: Record<string, { title: string; body: string }> = {
     title: "Your Quizplayo account is switched off",
     body: "Ask your school admin to switch it back on.",
   },
+  wrong_token_type: {
+    title: "Your school's system sent the wrong kind of token",
+    body: "This token was made for something other than signing in. Ask whoever runs your school's system to send a sign-in token.",
+  },
   token_replayed: {
     title: "That sign-in link was already used",
     body: "For your safety each sign-in works once. Open Quizplayo again from your school's system.",

@@ -35,6 +35,8 @@ interface Player {
   score: number;
   /** 1 to the team count in a team game; 0 otherwise. */
   team: number;
+  /** Joined with the PIN and a nickname, not signed in. */
+  guest?: boolean;
 }
 
 interface TeamStanding {
@@ -284,6 +286,7 @@ function HostScreen() {
                   <PlayerBadge name={p.name} size={26} />
                   {p.team > 0 && <TeamBadge team={p.team} />}
                   {p.name}
+                  {p.guest && <span className="gl-guest">Guest</span>}
                   <button type="button" title={"Remove " + p.name} aria-label={"Remove " + p.name}
                     onClick={() => window.confirm(`Remove ${p.name} from the game?`) && send("kick", { playerId: p.id })}>
                     ×

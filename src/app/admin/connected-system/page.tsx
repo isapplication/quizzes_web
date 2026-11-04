@@ -7,14 +7,17 @@ import { isIndependent, isSchoolAdmin, useMe } from "@/lib/me";
 import { LoadingState, PageHeader } from "@/components/ui/States";
 
 interface Settings {
+  /** This school's id in Quizplayo: the school's system checks it in Quizplayo's requests. */
+  schoolId: string;
   system: {
     issuer: string;
     publicKeyPem: string;
     signInUrl: string;
     rosterUrl: string | null;
+    eventsUrl: string | null;
     enabled: boolean;
     lastRosterSyncAt: string | null;
-    lastRosterResult: { ok: boolean; classes?: number; people?: number; disabled?: number; error?: string } | null;
+    lastRosterResult: { ok: boolean; classes?: number; people?: number; disabled?: number; error?: string; needsConfirm?: boolean } | null;
   } | null;
   forTheirSystem: { ssoUrl: string; audience: string; jwksUrl: string; maxTokenSeconds: number };
   lastSignIn: Record<string, unknown> | null;
@@ -35,16 +38,19 @@ export default function ConnectedSystemPage() {
 function ConnectedSystem() {
   const me = useMe();
   const [settings, setSettings] = useState<Settings | null>(null);
-  const [form, setForm] = useState({ issuer: "", publicKeyPem: "", signInUrl: "", rosterUrl: "" });
+  const [form, setForm] = useState({ issuer: "", publicKeyPem: "", signInUrl: "", rosterUrl: "", eventsUrl: "" });
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // The roster guard stopped a copy that would switch off many people: the admin may copy anyway.
+  const [needsConfirm, setNeedsConfirm] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   function show(s: Settings) {
     setSettings(s);
     if (s.system) {
       setForm({ issuer: s.system.issuer, publicKeyPem: s.system.publicKeyPem, signInUrl: s.system.signInUrl,
-        rosterUrl: s.system.rosterUrl ?? "" });
+        rosterUrl: s.system.rosterUrl ?? "", eventsUrl: s.system.eventsUrl ?? "" });
     }
   }
 
@@ -58,13 +64,25 @@ function ConnectedSystem() {
     setBusy(step);
     setError(null);
     setNotice(null);
+    setNeedsConfirm(false);
     try {
       show(await api<Settings>(path, { method, body }));
       setNotice(done);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "That did not work. Please try again.");
+      setNeedsConfirm(e instanceof ApiError && e.code === "roster_needs_confirm");
     }
     setBusy(null);
+  }
+
+  async function copySchoolId(id: string) {
+    try {
+      await navigator.clipboard.writeText(id);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setError("Your browser didn't allow copying. Select the school id and copy it yourself.");
+    }
   }
 
   if (!isSchoolAdmin(me) || isIndependent(me)) {
@@ -80,7 +98,20 @@ function ConnectedSystem() {
       <PageHeader title="Your school's own system"
                   description="Optional. Connect it, and people sign in to Quizplayo straight from your school's system, and Quizplayo copies your classes from it every night."
                   action={s && <span className={"chip " + (s.enabled ? "chip-ok" : "chip-warn")}>{s.enabled ? "Switched on" : "Switched off"}</span>} />
-      {error && <div className="alert alert-danger" role="alert">{error}</div>}
+      {error && (
+        <div className="alert alert-danger" role="alert">
+          {error}
+          {needsConfirm && (
+            <div className="row" style={{ marginTop: 8 }}>
+              <button className="btn btn-light" type="button" disabled={busy !== null}
+                      onClick={() => run("roster", "/api/v1/admin/connected-system/roster-sync?confirm=true", "POST", undefined,
+                        "People and classes copied.")}>
+                {busy === "roster" ? "Copying…" : "Copy anyway"}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
       {notice && <div className="alert alert-success">{notice}</div>}
 
       <section className="card stack">
@@ -90,7 +121,16 @@ function ConnectedSystem() {
           <dt>Send people to (form POST of <code>token</code>)</dt><dd><code>{t.ssoUrl}</code></dd>
           <dt>Audience (<code>aud</code>)</dt><dd><code>{t.audience}</code></dd>
           <dt>Token lifetime</dt><dd>{t.maxTokenSeconds} seconds at most, signed with RS256</dd>
-          <dt>Quizplayo&apos;s public key (to check roster requests)</dt><dd><code>{t.jwksUrl}</code></dd>
+          <dt>Quizplayo&apos;s public key (to check roster requests and game events)</dt><dd><code>{t.jwksUrl}</code></dd>
+          <dt id="cs-school-id-label">Your school&apos;s id in Quizplayo (the <code>school</code> claim in Quizplayo&apos;s requests)</dt>
+          <dd className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <code aria-labelledby="cs-school-id-label">{settings.schoolId}</code>
+            <button className="btn btn-light" type="button" onClick={() => copySchoolId(settings.schoolId)}
+                    aria-describedby="cs-school-id-label">
+              {copied ? "Copied" : "Copy"}
+            </button>
+            <span className="sr-only" aria-live="polite">{copied ? "School id copied" : ""}</span>
+          </dd>
         </dl>
       </section>
 
@@ -117,7 +157,18 @@ function ConnectedSystem() {
           <div className="field">
             <label htmlFor="cs-roster">Roster address (optional)</label>
             <input id="cs-roster" type="url" value={form.rosterUrl} onChange={(e) => setForm({ ...form, rosterUrl: e.target.value })}
+                   autoCapitalize="off" autoCorrect="off" spellCheck={false}
                    placeholder="https://portal.your-school.org/api/quizplayo/roster" />
+          </div>
+          <div className="field">
+            <label htmlFor="cs-events">Events address (optional)</label>
+            <p className="hint" id="cs-events-hint">
+              Quizplayo tells your school&apos;s system here when a class game opens and ends, so it can let that class know.
+            </p>
+            <input id="cs-events" type="url" value={form.eventsUrl} aria-describedby="cs-events-hint"
+                   onChange={(e) => setForm({ ...form, eventsUrl: e.target.value })}
+                   autoCapitalize="off" autoCorrect="off" spellCheck={false}
+                   placeholder="https://portal.your-school.org/api/quizplayo/events" />
           </div>
         </div>
         <div className="row">
