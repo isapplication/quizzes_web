@@ -34,6 +34,11 @@
   --a3-text: var(--sc);
   --a4: var(--danger);
   --a4-text: #ffffff;
+  /* Answers 5 and 6 (Wave 1b: triangle, square), from the school's own tertiary and success colours. */
+  --a5: var(--success);
+  --a5-text: #ffffff;
+  --a6: var(--tc);
+  --a6-text: var(--sc);
 
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
   --radius: 8px;

@@ -2,9 +2,9 @@
 
 import { type CSSProperties, useEffect, useState } from "react";
 import type { Band } from "@/lib/gameLook";
-import { AnswerShape, SHAPE_NAMES } from "./AnswerShape";
+import { AnswerShape, shapeName, shapeNumber } from "./AnswerShape";
 
-/** One answer option in the IS answer colours, always with its shape and text (never colour alone). */
+/** One answer option in the school's answer colours, always with its shape and text (never colour alone). */
 export function AnswerTile({
   index,
   text,
@@ -20,7 +20,7 @@ export function AnswerTile({
   state?: "correct" | "wrong" | "chosen" | "dim";
   count?: number;
 }) {
-  const n = (index % 4) + 1;
+  const n = shapeNumber(index);
   return (
     <button
       type="button"
@@ -55,24 +55,49 @@ export function useCountdown(closesAt: number | null, serverNow: () => number): 
  * An answer in a live game, drawn in the game's look (game-looks.css): always its colour, its shape and its text, so
  * colour is never the only cue. After the question closes it shows how many chose it and marks the right one.
  */
-export function GameTile({ index, text, onClick, state, count }: {
+export function GameTile({ index, text, onClick, state, count, share }: {
   index: number;
   text: string;
   onClick?: () => void;
   state?: "correct" | "dim" | "chosen";
   count?: number;
+  /** Results: this answer's bar, 0 to 100 against the most chosen (the count says the number). */
+  share?: number;
 }) {
-  const label = SHAPE_NAMES[index % 4] + ": " + text + (state === "correct" ? ", the right answer" : "")
+  const label = shapeName(index) + ": " + text + (state === "correct" ? ", the right answer" : "")
     + (count !== undefined ? `, ${count} chose it` : "");
   return (
     <button type="button" className={"gl-tile" + (state === "dim" ? " is-dim" : state === "chosen" ? " is-chosen" : "")}
-            data-n={(index % 4) + 1} style={{ "--i": index } as CSSProperties} onClick={onClick} disabled={!onClick}
+            data-n={shapeNumber(index)} style={{ "--i": index } as CSSProperties} onClick={onClick} disabled={!onClick}
             aria-label={label} aria-pressed={onClick ? state === "chosen" : undefined}>
       <span className="gl-shape"><AnswerShape index={index} color="currentColor" /></span>
       {text && <span className="gl-tile-text">{text}</span>}
       {count !== undefined && <span className="gl-count">{count}</span>}
+      {share !== undefined && <span className="gl-tile-bar" aria-hidden="true"><span style={{ width: share + "%" }} /></span>}
       {state === "correct" && <span className="gl-mark" aria-hidden="true">✓ Correct</span>}
     </button>
+  );
+}
+
+/**
+ * A multi-select answer in a live game: the tile is the checkbox's label, so a tap, Space or a screen reader all toggle
+ * it. The tick box and the shape show the choice, never colour alone.
+ */
+export function GameCheckTile({ index, text, checked, onChange, disabled }: {
+  index: number;
+  text: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <label className={"gl-tile gl-check" + (checked ? " is-chosen" : "")} data-n={shapeNumber(index)}
+           style={{ "--i": index } as CSSProperties}>
+      <input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)}
+             aria-label={shapeName(index) + ": " + text} />
+      <span className="gl-shape"><AnswerShape index={index} color="currentColor" /></span>
+      <span className="gl-tile-text">{text}</span>
+    </label>
   );
 }
 

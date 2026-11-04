@@ -1,5 +1,6 @@
 /** Assignments: a quiz done at each student's own pace, by link or for a class (starter-library plan, Step 3a). */
 import type { ShownBrand } from "@/lib/me";
+import type { AnswerKey, Pick } from "@/lib/questionTypes";
 
 export interface AssignmentSummary {
   assignmentId: string;
@@ -66,6 +67,10 @@ export interface PlayQuestion {
   right: string[];
   /** CARD: the back of the card. */
   back: string | null;
+  /** Wave 1b: how it is answered (from the type when missing), the slider's scale, and a slide's title. */
+  pick?: Pick;
+  slider?: { min: number; max: number; step: number; unit?: string } | null;
+  title?: string | null;
 }
 
 export interface PlayState {
@@ -93,10 +98,33 @@ export interface Answered {
   /** PUZZLE: the items in the right order; MATCH: the right pairs, [left, right]; otherwise null. */
   solution: string[] | [string, string][] | null;
   state: PlayState;
+  /** Wave 1b: every right choice (multi-select), the judged share 0 to 1, false for a poll, and the answer key. */
+  correctIndexes?: number[];
+  fraction?: number;
+  counted?: boolean;
+  key?: AnswerKey;
 }
 
 /** What a student sends for one activity round. */
 export type ActivityAnswer = { order: number[] } | { matches: number[] } | { knew: boolean };
+
+/**
+ * What a student sends for a Wave 1b question. The value is sent both on its own ({choices}, {text}, {value}, as
+ * {order} already is) and inside {answer: {...}}, the live game's form, so either reading of the request works.
+ */
+export type TypedAnswer =
+  | { choices: number[]; answer: { choices: number[] } }
+  | { text: string; answer: { text: string } }
+  | { value: number; answer: { value: number } }
+  | { answer: Record<string, never> };
+
+export const typedAnswer = {
+  choices: (choices: number[]): TypedAnswer => ({ choices, answer: { choices } }),
+  text: (text: string): TypedAnswer => ({ text, answer: { text } }),
+  value: (value: number): TypedAnswer => ({ value, answer: { value } }),
+  /** A slide: nothing to answer, Continue moves the attempt on. */
+  seen: (): TypedAnswer => ({ answer: {} }),
+};
 
 export const ACTIVITY_TYPES = ["PUZZLE", "MATCH", "CARD"];
 

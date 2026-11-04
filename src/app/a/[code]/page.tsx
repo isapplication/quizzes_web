@@ -7,7 +7,9 @@ import { ActivityRound } from "@/components/ActivityRound";
 import { AnswerTile } from "@/components/Stage";
 import { OwnerBrandMark, useOwnerBrand } from "@/components/OwnerBrand";
 import { api, ApiError } from "@/lib/api";
-import { ACTIVITY_TYPES, ActivityAnswer, Answered, dueText, PlayInfo, PlayState } from "@/lib/assignments";
+import { MultiSelectForm, SliderForm, TypeAnswerForm } from "@/components/AnswerInputs";
+import { ACTIVITY_TYPES, ActivityAnswer, Answered, dueText, PlayInfo, PlayState, type TypedAnswer, typedAnswer } from "@/lib/assignments";
+import { keyText, outcomeOf, pickOf } from "@/lib/questionTypes";
 import { LoadingState } from "@/components/ui/States";
 
 /** This device's key for the attempt at one assignment, kept so a reload carries on. */
@@ -42,7 +44,7 @@ export default function AssignmentPage() {
   const { code } = useParams<{ code: string }>();
   const [info, setInfo] = useState<PlayInfo | null>(null);
   const [state, setState] = useState<PlayState | null>(null);
-  const [feedback, setFeedback] = useState<(Answered & { chosen: number | null }) | null>(null);
+  const [feedback, setFeedback] = useState<(Answered & { chosen: number[] }) | null>(null);
   // The last round's type: the end screen speaks of cards after a set of flashcards.
   const [lastType, setLastType] = useState<string | null>(null);
   const [nickname, setNickname] = useState("");
@@ -87,9 +89,10 @@ export default function AssignmentPage() {
     setBusy(false);
   }
 
-  async function answer(given: { choice: number } | ActivityAnswer) {
+  async function answer(given: { choice: number } | ActivityAnswer | TypedAnswer) {
     if (!state?.question || busy || feedback) return;
     const type = state.question.type;
+    const slide = (state.question.pick ?? pickOf(type)) === "none";
     setBusy(true);
     setError(null);
     try {
@@ -97,8 +100,8 @@ export default function AssignmentPage() {
         method: "POST", body: { attemptKey: key, index: state.question.index, ...given },
       });
       setLastType(type);
-      if (type === "CARD") setState(r.state);
-      else setFeedback({ ...r, chosen: "choice" in given ? given.choice : null });
+      if (type === "CARD" || slide) setState(r.state);
+      else setFeedback({ ...r, chosen: "choice" in given ? [given.choice] : "choices" in given ? given.choices : [] });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Quizplayo could not save your answer. Please try again.");
     }
@@ -113,6 +116,11 @@ export default function AssignmentPage() {
 
   const q = state?.question ?? null;
   const activity = q !== null && ACTIVITY_TYPES.includes(q.type);
+  const pick = q ? q.pick ?? pickOf(q.type) : "one";
+  const outcome = feedback ? outcomeOf({ answered: true, correct: feedback.correct, fraction: feedback.fraction, counted: feedback.counted }) : null;
+  const rightChoices = feedback ? feedback.correctIndexes ?? (feedback.correctIndex >= 0 ? [feedback.correctIndex] : []) : [];
+  const answerWords = feedback && q && (outcome === "wrong" || outcome === "partial") && (pick === "text" || pick === "number" || pick === "many")
+    ? keyText(q.type, feedback.key, q.choices, rightChoices, q.slider?.step ?? 1) : null;
   const step = q?.type === "CARD" ? "Card" : activity ? "Round" : "Question";
   return (
     <div className="stage">
@@ -194,7 +202,25 @@ export default function AssignmentPage() {
           </>
         )}
 
-        {state && q && !activity && !feedback && (
+        {state && q && !activity && pick === "none" && (
+          <>
+            <div className="assignment-progress">
+              <span>{q.index + 1} of {q.total}</span>
+              <span>{state.correct} right so far</span>
+            </div>
+            <article className="assignment-slide">
+              <h1>{q.title}</h1>
+              {q.text && <p>{q.text}</p>}
+            </article>
+            <div className="row" style={{ justifyContent: "center" }}>
+              <button type="button" className="btn btn-primary" style={{ fontSize: 20 }} disabled={busy} onClick={() => answer(typedAnswer.seen())} autoFocus>
+                {busy ? "Opening…" : "Continue"}
+              </button>
+            </div>
+          </>
+        )}
+
+        {state && q && !activity && pick !== "none" && !feedback && (
           <>
             <div className="assignment-progress">
               <span>Question {q.index + 1} of {q.total}</span>
@@ -202,26 +228,39 @@ export default function AssignmentPage() {
             </div>
             {q.visual && <span className="question-visual-big" aria-hidden="true">{q.visual}</span>}
             <div className="question-text">{q.text}</div>
-            <div className="answer-grid">
-              {q.choices.map((c, i) => <AnswerTile key={i} index={i} text={c} onClick={() => answer({ choice: i })} />)}
-            </div>
+            {pick === "one" && (
+              <div className="answer-grid">
+                {q.choices.map((c, i) => <AnswerTile key={i} index={i} text={c} disabled={busy} onClick={() => answer({ choice: i })} />)}
+              </div>
+            )}
+            {pick === "many" && (
+              <MultiSelectForm key={q.index} variant="stage" choices={q.choices} busy={busy} onSubmit={(c) => answer(typedAnswer.choices(c))} />
+            )}
+            {pick === "text" && <TypeAnswerForm key={q.index} variant="stage" busy={busy} onSubmit={(t) => answer(typedAnswer.text(t))} />}
+            {pick === "number" && q.slider && (
+              <SliderForm key={q.index} variant="stage" slider={q.slider} busy={busy} onSubmit={(v) => answer(typedAnswer.value(v))} />
+            )}
           </>
         )}
 
-        {state && q && !activity && feedback && (
+        {state && q && !activity && pick !== "none" && feedback && (
           <>
-            <div className={"feedback assignment-feedback " + (feedback.correct ? "ok" : "no")} role="status">
-              {feedback.correct ? "✓ Correct" : "✕ Not quite"}
-              {feedback.correct && <div style={{ fontSize: 18 }}>+{feedback.points} points</div>}
+            <div className={"feedback assignment-feedback " + (outcome === "correct" || outcome === "partial" ? "ok" : outcome === "vote" ? "neutral" : "no")}
+                 role="status">
+              {outcome === "correct" ? "✓ Correct" : outcome === "partial" ? "✓ Partly right" : outcome === "vote" ? "Thanks for voting" : "✕ Not quite"}
+              {(outcome === "correct" || outcome === "partial") && <div style={{ fontSize: 18 }}>+{feedback.points} points</div>}
+              {answerWords && <div style={{ fontSize: 18, fontWeight: 400 }}>The answer: {answerWords}</div>}
             </div>
             <div className="question-text">{q.text}</div>
-            <div className="answer-grid">
-              {q.choices.map((c, i) => (
-                // The right answer is marked; the player's own wrong choice stays visible; the rest fade.
-                <AnswerTile key={i} index={i} text={c}
-                            state={i === feedback.correctIndex ? "correct" : i === feedback.chosen ? "chosen" : "dim"} />
-              ))}
-            </div>
+            {(pick === "one" || pick === "many") && (
+              <div className="answer-grid">
+                {q.choices.map((c, i) => (
+                  // The right answers are marked (none in a poll); the student's own choices stay visible; the rest fade.
+                  <AnswerTile key={i} index={i} text={c}
+                              state={rightChoices.includes(i) && outcome !== "vote" ? "correct" : feedback.chosen.includes(i) ? "chosen" : "dim"} />
+                ))}
+              </div>
+            )}
             {feedback.explanation && <div className="card">{feedback.explanation}</div>}
             <div className="row" style={{ justifyContent: "center" }}>
               <button type="button" className="btn btn-primary" style={{ fontSize: 20 }} onClick={next} autoFocus>

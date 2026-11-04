@@ -1,7 +1,7 @@
 /*
  * Game looks: the live game's host and player screens (GameLook.tsx, lib/gameLook.ts).
  *
- * The school's Brand colours (--pc, --sc, --tc, the answer colours --a1 to --a4) drive every button, answer tile, the
+ * The school's Brand colours (--pc, --sc, --tc, the answer colours --a1 to --a6) drive every button, answer tile, the
  * PIN and the podium. A grade adds only its family's fonts, shapes and motion, and decoration-only accent tokens
  * (--g1 to --g6) for its scene and character. Raw colours appear only in the token blocks at the top of this file.
  */
@@ -187,10 +187,12 @@
 .gl-tile[data-n="2"] { --bg: var(--a2); }
 .gl-tile[data-n="3"] { --bg: var(--a3); }
 .gl-tile[data-n="4"] { --bg: var(--a4); }
+.gl-tile[data-n="5"] { --bg: var(--a5); }
+.gl-tile[data-n="6"] { --bg: var(--a6); }
 .gl-tile:disabled { cursor: default; }
 .gl-shape { display: grid; place-items: center; flex: none; }
 .gl-shape svg { width: 1.5em; height: 1.5em; }
-.gl-tile-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.gl-tile-text { flex: 1; min-width: 0; overflow-wrap: anywhere; hyphens: auto; }
 .gl-count { margin-left: auto; font-variant-numeric: tabular-nums; background: rgb(0 0 0 / 0.22); color: #ffffff; border-radius: 999px; padding: 0.1em 0.6em; font-size: 0.8em; }
 .gl-mark { position: absolute; top: -0.7em; right: -0.3em; background: var(--card); color: var(--success); border: 3px solid var(--success); border-radius: 999px; padding: 0.1em 0.6em; font-size: 0.6em; font-weight: 800; white-space: nowrap; }
 .gl-tile.is-dim { background: color-mix(in oklab, var(--bg) 22%, var(--dim-base)); color: color-mix(in oklab, var(--sc) 70%, #ffffff); box-shadow: 0 var(--depth) 0 color-mix(in oklab, var(--bg) 22%, #d5d9e0); }
@@ -382,9 +384,68 @@
 .gl[data-band="k2"] .gl-confetti i { border-radius: 50%; }
 .gl[data-band="m68"] .gl-confetti i { border-radius: 0; }
 
+/* ---------- Wave 1b: 5–6 answers, multi-select, typed answers, slider, puzzle, slides ---------- */
+.gl-host .gl-tiles[data-count="5"], .gl-host .gl-tiles[data-count="6"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.gl-player .gl-tiles[data-count="5"], .gl-player .gl-tiles[data-count="6"] { grid-auto-rows: minmax(72px, 1fr); }
+/* Results: each answer's share as a bar inside its tile (the count, in text, is the real number). */
+.gl-tile-bar { position: absolute; left: 0.9em; right: 0.9em; bottom: 0.3em; height: 0.28em; border-radius: 999px; background: rgb(0 0 0 / 0.2); overflow: hidden; }
+.gl-tile-bar > span { display: block; height: 100%; background: currentColor; }
+/* Multi-select: the tile is the checkbox's label. */
+.gl-check { cursor: pointer; flex-wrap: wrap; }
+/* Beside the checkbox and shape a narrow tile has little room: the text takes its own row instead of breaking words. */
+.gl-check .gl-tile-text { flex: 1 1 4.5em; overflow-wrap: break-word; }
+.gl-check input { inline-size: 1.3em; block-size: 1.3em; flex: none; margin: 0; accent-color: var(--sc); cursor: inherit; }
+.gl-check:has(input:focus-visible) { outline: 4px solid var(--stage-ink); outline-offset: 3px; }
+.gl-check:has(input:disabled) { cursor: default; }
+.gl[data-band="h912"] .gl-check input { align-self: center; margin-inline-start: 0.7em; }
+.gl-multi { flex: 1; display: flex; flex-direction: column; gap: 12px; }
+.gl-multi .gl-tiles { flex: 1; }
+.gl-hint { text-align: center; margin: 0; }
+.gl-multi > .gl-btn, .gl-answer-form .gl-btn, .gl-slider .gl-btn, .gl-order .btn-primary { align-self: stretch; justify-self: stretch; width: 100%; }
+.gl-answer-form, .gl-slider { padding: 18px 16px; }
+.gl-slider { text-align: center; }
+.gl-slider .slider-ends { font-size: 15px; }
+.gl-order { padding: 12px; }
+.gl-order .order-list li { color: var(--sc); }
+.gl-result.vote .gl-result-icon { --bg: var(--pc); background: var(--pc); }
+/* Partly right (multi-select, slider): a half-filled mark in amber, so it never reads as fully right. */
+.gl-result.partial .gl-result-icon { --bg: var(--warning); background: var(--warning); color: var(--stage-ink); }
+
+/* The classroom screen: what players are doing, and the results per type. */
+.gl-host-note { margin: 0; text-align: center; }
+.gl-host-panel { padding: 0.8em 1.2em; display: grid; gap: 0.6em; font-size: clamp(18px, 2cqi, 40px); text-align: center; }
+.gl-host-panel-big { font-family: var(--font-display); font-weight: var(--display-weight); font-size: 1.35em; line-height: 1.15; overflow-wrap: anywhere; }
+.gl-scale { height: 0.5em; border-radius: 999px; background: var(--line); }
+.gl-scale-ends { display: flex; justify-content: space-between; gap: 1em; font-weight: 700; font-variant-numeric: tabular-nums; }
+.gl-order-chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.5em; justify-content: center; }
+.gl-order-chips li { padding: 0.3em 0.9em; border-radius: 999px; background: var(--soft); font-weight: 700; overflow-wrap: anywhere; }
+.gl-order-key { margin: 0 auto; padding-inline-start: 1.6em; text-align: left; display: grid; gap: 0.3em; font-weight: 700; }
+.gl-share { height: 0.6em; border-radius: 999px; background: var(--line); overflow: hidden; }
+.gl-share > span { display: block; height: 100%; background: var(--success); }
+.gl-bars { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.4em; text-align: left; }
+.gl-bars li { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 2fr) auto; gap: 0.6em; align-items: center; }
+.gl-bars-text { font-weight: 700; overflow-wrap: anywhere; }
+.gl-bars-mark { color: var(--success); }
+.gl-bars-bar { height: 0.7em; border-radius: 999px; background: var(--line); overflow: hidden; }
+.gl-bars-bar > span { display: block; height: 100%; background: var(--pc); }
+.gl-bars li.ok .gl-bars-bar > span { background: var(--success); }
+.gl-bars-count { font-weight: 800; font-variant-numeric: tabular-nums; }
+.gl-spread { position: relative; height: 2.4em; margin-top: 1.3em; }
+.gl-spread::before { content: ""; position: absolute; inset-inline: 0; top: 50%; height: 0.5em; translate: 0 -50%; border-radius: 999px; background: var(--line); }
+.gl-spread .band { position: absolute; top: 50%; height: 1.1em; translate: 0 -50%; border: 2px solid var(--success); border-radius: 6px; background: color-mix(in oklab, var(--success) 35%, transparent); }
+.gl-spread .range { position: absolute; top: 50%; height: 0.5em; translate: 0 -50%; border-radius: 999px; background: var(--pc); }
+.gl-spread .mean, .gl-spread .answer { position: absolute; top: 0; bottom: 0; width: 3px; translate: -50% 0; background: var(--stage-ink); }
+.gl-spread .answer { background: var(--success); }
+.gl-spread b { position: absolute; bottom: 100%; left: 50%; translate: -50% 0; font-size: 0.6em; white-space: nowrap; }
+.gl-spread .mean b { top: 100%; bottom: auto; }
+.gl-spread-facts { display: flex; flex-wrap: wrap; gap: 0.3em 1.2em; justify-content: center; margin-top: 0.8em; }
+.gl-slide { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 0.6em; text-align: center; padding: 1em 1.4em; }
+.gl-slide-title { font-family: var(--font-display); font-weight: var(--display-weight); font-size: clamp(30px, 4.4cqi, 90px); line-height: 1.1; margin: 0; text-wrap: balance; overflow-wrap: anywhere; }
+.gl-slide-text { font-size: clamp(20px, 2.4cqi, 48px); line-height: 1.35; margin: 0; max-width: 42ch; text-wrap: pretty; overflow-wrap: anywhere; white-space: pre-line; }
+
 /* ---------- Narrow screens (a teacher's phone, a small laptop window) ---------- */
 @container (max-width: 640px) {
-  .gl-host .gl-tiles { grid-template-columns: 1fr; grid-auto-rows: auto; flex: none; }
+  .gl-host .gl-tiles, .gl-host .gl-tiles[data-count] { grid-template-columns: 1fr; grid-auto-rows: auto; flex: none; }
   .gl-host .gl-buddy-side { display: none; }
 }
 @media (max-width: 360px) {

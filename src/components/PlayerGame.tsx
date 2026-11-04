@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { GameTile, GameTimer, ordinal, TeamBadge, useCountdown } from "./Stage";
-import { AnswerShape } from "./AnswerShape";
+import { AnswerShape, shapeNumber } from "./AnswerShape";
+import { OrderList } from "./ActivityRound";
+import { MultiSelectForm, type SliderShown, SliderForm, TypeAnswerForm } from "./AnswerInputs";
+import { type AnswerKey, formatNumber, keyText, outcomeOf, type Pick, pickOf } from "@/lib/questionTypes";
 import { GameLook } from "@/components/live/GameLook";
 import { Buddy, Confetti } from "@/components/live/LookArt";
 import { LastSecondsTicks, PlayerBadge, SoundToggle } from "@/components/live/GameBits";
@@ -22,7 +25,17 @@ interface Question {
   closesAt: number;
   /** False in an accuracy game: there is no countdown. */
   timed?: boolean;
+  /** Wave 1b: the question's type and how it is answered; missing from an older game server (a quiz question). */
+  qtype?: string;
+  pick?: Pick;
+  /** SLIDER: the scale, without the answer. */
+  slider?: SliderShown;
+  /** SLIDE: its title (the text is the body). */
+  title?: string;
 }
+
+/** How this question is answered, read from {@code pick}, else from its type. */
+const pickFor = (q: Question): Pick => q.pick ?? pickOf(q.qtype);
 
 interface Result {
   index: number;
@@ -39,6 +52,23 @@ interface Result {
   teamRank?: number;
   teamScore?: number;
   teams?: number;
+  /** Wave 1b: the judged share from 0 to 1 (partial points), and false for a poll, which is never right or wrong. */
+  fraction?: number;
+  counted?: boolean;
+}
+
+/** The key of the question that just closed (Wave 1b "closed" message). */
+interface ClosedKey {
+  index: number;
+  qtype: string;
+  correctIndexes: number[];
+  key: AnswerKey;
+}
+
+/** What this player sent, shown while they wait: a shape for a single choice, otherwise words. */
+interface Sent {
+  shape: number | null;
+  text: string;
 }
 
 interface Final {
@@ -53,7 +83,7 @@ interface Final {
   teams?: number;
 }
 
-type View = "connecting" | "lobby" | "intro" | "question" | "answered" | "result" | "final" | "out";
+type View = "connecting" | "lobby" | "intro" | "question" | "slide" | "answered" | "result" | "final" | "out";
 
 /**
  * A student's device in a live game. The question and options come from the server without the key;
@@ -84,11 +114,13 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
   const [team, setTeam] = useState(0);
   const [intro, setIntro] = useState<{ index: number; total: number; startsAt: number } | null>(null);
   const [question, setQuestion] = useState<Question | null>(null);
-  const [chosen, setChosen] = useState<number | null>(null);
+  const [sent, setSent] = useState<Sent | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [final, setFinal] = useState<Final | null>(null);
   // The right answer of the question that just closed, so a wrong answer can show it.
-  const [correctIndex, setCorrectIndex] = useState<number | null>(null);
+  const [closedKey, setClosedKey] = useState<ClosedKey | null>(null);
+  // The question on screen, for the message handler (a slide's closing sends no result to show).
+  const shownQuestion = useRef<Question | null>(null);
   const band = lookBand(lookGrade);
   const words = lookWords(band);
   const { sound: playSound, buzz, muted, toggle } = useGameSound(band);
@@ -98,6 +130,13 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
   const serverNow = useCallback(() => live.current?.serverNow() ?? Date.now(), []);
 
   const onMessage = useCallback((m: LiveMessage) => {
+    // A question opens: a slide shows "Look at the screen"; everything else is answered.
+    const opened = (q: Question) => {
+      setQuestion(q);
+      shownQuestion.current = q;
+      setSent(null);
+      setView(pickFor(q) === "none" ? "slide" : "question");
+    };
     switch (m.type) {
       case "joined":
         if (m.name) setShownName(String(m.name));
@@ -105,10 +144,10 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
         setScore(Number(m.score ?? 0));
         setTeam(Number(m.team ?? 0));
         if (m.question && !m.answered) {
-          setQuestion(m.question as unknown as Question);
-          setChosen(null);
-          setView("question");
+          opened(m.question as unknown as Question);
         } else if (m.question && m.answered) {
+          setQuestion(m.question as unknown as Question);
+          shownQuestion.current = m.question as unknown as Question;
           setView("answered");
         } else {
           setView(m.phase === "PODIUM" ? "final" : "lobby");
@@ -120,22 +159,31 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
         setView("intro");
         break;
       case "question":
-        setQuestion(m as unknown as Question);
-        setChosen(null);
-        setView("question");
+        opened(m as unknown as Question);
         break;
-      case "closed":
-        setCorrectIndex(Number(m.correctIndex));
+      case "closed": {
+        const ci = Number(m.correctIndex);
+        setClosedKey({
+          index: Number(m.index),
+          qtype: String(m.qtype ?? "QUIZ"),
+          correctIndexes: Array.isArray(m.correctIndexes) ? (m.correctIndexes as number[]) : ci >= 0 ? [ci] : [],
+          key: (m.key as AnswerKey) ?? {},
+        });
         break;
+      }
       case "answerAck":
         if (m.accepted === false && m.message) setMessage(String(m.message));
         break;
-      case "result":
+      case "result": {
+        setScore(Number(m.score));
+        // Nobody answers a slide: if a result comes for one, there is nothing to show.
+        const q = shownQuestion.current;
+        if (q && q.index === Number(m.index) && pickFor(q) === "none") break;
         setResult(m as unknown as Result);
         setMessage(null);
-        setScore(Number(m.score));
         setView("result");
         break;
+      }
       case "final":
         setFinal(m as unknown as Final);
         setScore(Number(m.score ?? 0));
@@ -183,23 +231,30 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
   useEffect(() => {
     if (view === "lobby") sound("joined");
     if (view === "result" && result) {
-      sound(result.correct ? "correct" : "wrong");
-      if (!compact) buzz(result.correct ? 60 : [40, 60, 40]);
+      const o = outcomeOf(result);
+      if (o === "vote") sound("tap");
+      else sound(o === "correct" || o === "partial" ? "correct" : "wrong");
+      if (!compact && o !== "vote") buzz(o === "correct" || o === "partial" ? 60 : [40, 60, 40]);
     }
     if (view === "final" && final) sound(final.rank <= 3 ? "fanfare" : "joined");
   }, [view]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function answer(i: number) {
-    if (!question || chosen !== null) return;
+  /** Sends one answer in its contract form: {choice} for one pick, {answer: {...}} for the other kinds. */
+  function send(given: { choice: number } | { answer: Record<string, unknown> }, shown: Sent) {
+    if (!question || sent !== null) return;
     sound("tap");
-    setChosen(i);
+    setSent(shown);
     setMessage(null);
-    live.current?.send({ type: "answer", index: question.index, choice: i });
+    live.current?.send({ type: "answer", index: question.index, ...given });
     setView("answered");
   }
 
-  const shownAnswer = result && !result.correct && question && correctIndex !== null && question.index === result.index
-    ? { index: correctIndex, text: question.choices[correctIndex] } : null;
+  const pick = question ? pickFor(question) : "one";
+  const outcome = result ? outcomeOf(result) : null;
+  const key = result && closedKey && question && closedKey.index === result.index && question.index === result.index ? closedKey : null;
+  const oneRight = key && key.correctIndexes.length === 1 && pickOf(key.qtype) === "one" ? key.correctIndexes[0] : null;
+  const shownAnswer = key && question && (outcome === "wrong" || outcome === "partial" || outcome === "none")
+    ? keyText(key.qtype, key.key, question.choices, key.correctIndexes, question.slider?.step ?? 1) : null;
 
   return (
     <GameLook grade={lookGrade} kind={compact ? "compact" : "player"}>
@@ -249,31 +304,72 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
                 {question.visual && <span className="gl-visual" aria-hidden="true">{question.visual}</span>}{question.text}
               </h1>
             )}
-            <div className="gl-tiles gl-in">
-              {question.choices.map((c, i) => <GameTile key={i} index={i} text={compact ? "" : c} onClick={() => answer(i)} />)}
-            </div>
+            {pick === "one" && (
+              <div className="gl-tiles gl-in" data-count={question.choices.length}>
+                {question.choices.map((c, i) => (
+                  <GameTile key={i} index={i} text={compact ? "" : c} onClick={() => send({ choice: i }, { shape: i, text: c })} />
+                ))}
+              </div>
+            )}
+            {pick === "many" && (
+              <MultiSelectForm variant="game" choices={question.choices} compact={compact}
+                               onSubmit={(choices) => send({ answer: { choices } },
+                                 { shape: null, text: choices.map((i) => question.choices[i]).join(", ") })} />
+            )}
+            {pick === "text" && (
+              <TypeAnswerForm variant="game" onSubmit={(text) => send({ answer: { text } }, { shape: null, text })} />
+            )}
+            {pick === "number" && question.slider && (
+              <SliderForm variant="game" slider={question.slider}
+                          onSubmit={(value) => send({ answer: { value } },
+                            { shape: null, text: formatNumber(value, question.slider!.step, question.slider!.unit ?? "") })} />
+            )}
+            {pick === "order" && (
+              <OrderList key={question.index} items={question.choices} busy={false} className="gl-card gl-order stack"
+                         submitLabel="Lock in my order"
+                         onSubmit={(order) => send({ answer: { order } }, { shape: null, text: order.map((i) => question.choices[i]).join(" → ") })} />
+            )}
           </>
+        )}
+        {view === "slide" && question && (
+          <div className="gl-center gl-in">
+            <Buddy grade={lookGrade} />
+            <div className="gl-big">Look at the screen</div>
+            {question.title && <div className="gl-card gl-waiting"><span className="gl-waiting-title">{question.title}</span></div>}
+            <div className="gl-sub">Your teacher moves on when everyone has read it.</div>
+          </div>
         )}
         {view === "answered" && (
           <div className="gl-center gl-in">
             <Buddy grade={lookGrade} />
             <div className="gl-big">Answer in!</div>
-            {question && chosen !== null && (
+            {sent && (
               <div className="gl-card gl-chosen">
                 <span className="gl-sub">Your answer</span>
-                <span className="gl-answer"><AnswerShape index={chosen} color={`var(--a${(chosen % 4) + 1})`} />{question.choices[chosen]}</span>
+                <span className="gl-answer">
+                  {sent.shape !== null && <AnswerShape index={sent.shape} color={`var(--a${shapeNumber(sent.shape)})`} />}{sent.text}
+                </span>
               </div>
             )}
             <div className="gl-sub">Waiting for the others<span className="gl-dots" aria-hidden="true"><i>.</i><i>.</i><i>.</i></span></div>
           </div>
         )}
-        {view === "result" && result && (
+        {view === "result" && result && outcome && (
           <div className="gl-center gl-in">
-            <Buddy grade={lookGrade} mood={result.correct ? "happy" : "sad"} />
-            <div className={"gl-card gl-result " + (result.correct ? "ok" : "no")} role="status">
-              <div className="gl-result-icon gl-on-large" aria-hidden="true">{result.correct ? "✓" : result.answered ? "✕" : "⏱"}</div>
-              <div className="gl-big">{result.correct ? words.correct : result.answered ? words.wrong : words.timeUp}</div>
-              {result.correct && (
+            <Buddy grade={lookGrade} mood={outcome === "wrong" || outcome === "none" ? "sad" : "happy"} />
+            <div className={"gl-card gl-result " + (outcome === "correct" ? "ok" : outcome === "partial" ? "partial" : outcome === "vote" ? "vote" : "no")}
+                 role="status">
+              <div className="gl-result-icon gl-on-large" aria-hidden="true">
+                {outcome === "correct" ? "✓" : outcome === "partial" ? "◐" : outcome === "vote" ? "★" : outcome === "wrong" ? "✕" : "⏱"}
+              </div>
+              <div className="gl-big">
+                {outcome === "correct" ? words.correct : outcome === "partial" ? "Partly right" : outcome === "vote" ? "Thanks for voting"
+                  : outcome === "wrong" ? words.wrong : words.timeUp}
+              </div>
+              {outcome === "partial" && result.fraction !== undefined && (
+                <div className="gl-sub">{Math.round(result.fraction * 100)}% of the way there</div>
+              )}
+              {(outcome === "correct" || outcome === "partial") && (
                 <>
                   <div className="pts">+{result.points.toLocaleString()} points</div>
                   {result.streakBonus > 0 && <div>🔥 Streak {result.streak} · +{result.streakBonus} bonus</div>}
@@ -283,7 +379,7 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
                 <div className="gl-sub">
                   The answer was{" "}
                   <span className="gl-answer">
-                    <AnswerShape index={shownAnswer.index} color={`var(--a${(shownAnswer.index % 4) + 1})`} />{shownAnswer.text}
+                    {oneRight !== null && <AnswerShape index={oneRight} color={`var(--a${shapeNumber(oneRight)})`} />}{shownAnswer}
                   </span>
                 </div>
               )}

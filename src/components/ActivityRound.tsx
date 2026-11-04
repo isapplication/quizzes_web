@@ -21,26 +21,48 @@ export function ActivityRound({ q, feedback, busy, onAnswer }: {
 
 type RoundProps = { q: PlayQuestion; feedback: Answered | null; busy: boolean; onAnswer: (answer: ActivityAnswer) => void };
 
-/** Put in order: each item has its own Move up and Move down buttons; the new place is announced. */
+/** Put in order (an assignment's PUZZLE round): the shared {@link OrderList}, checked by the server. */
 function OrderRound({ q, feedback, busy, onAnswer }: RoundProps) {
+  return (
+    <OrderList items={q.items} solution={(feedback?.solution ?? null) as string[] | null} done={feedback !== null} busy={busy}
+               onSubmit={(order) => onAnswer({ order })} />
+  );
+}
+
+/**
+ * Put in order: each item has its own Move up and Move down buttons; the new place is announced. {@code onSubmit} gets
+ * the order as indexes into {@code items} (the shuffled list shown). With a {@code solution}, each place is marked right
+ * or wrong. Used by assignments and by live puzzle questions (Wave 1b).
+ */
+export function OrderList({ items, solution = null, done = false, busy, onSubmit, submitLabel = "Check my order",
+  busyLabel = "Checking…", className = "activity-panel stack" }: {
+  items: string[];
+  solution?: string[] | null;
+  /** No more moving: the answer was sent. */
+  done?: boolean;
+  busy: boolean;
+  onSubmit: (order: number[]) => void;
+  submitLabel?: string;
+  busyLabel?: string;
+  className?: string;
+}) {
   // places[k]: which shown item is now k-th.
-  const [places, setPlaces] = useState(() => q.items.map((_, i) => i));
+  const [places, setPlaces] = useState(() => items.map((_, i) => i));
   const [said, setSaid] = useState("");
-  const solution = (feedback?.solution ?? null) as string[] | null;
 
   function move(from: number, to: number) {
     if (to < 0 || to >= places.length) return;
     const next = [...places];
     [next[from], next[to]] = [next[to], next[from]];
     setPlaces(next);
-    setSaid(q.items[next[to]] + " moved to place " + (to + 1) + " of " + next.length + ".");
+    setSaid(items[next[to]] + " moved to place " + (to + 1) + " of " + next.length + ".");
   }
 
   return (
-    <form className="activity-panel stack" onSubmit={(e) => { e.preventDefault(); onAnswer({ order: places }); }}>
+    <form className={className} onSubmit={(e) => { e.preventDefault(); if (!done) onSubmit(places); }}>
       <ol className="order-list">
         {places.map((item, k) => {
-          const text = q.items[item];
+          const text = items[item];
           const right = solution ? solution[k] === text : null;
           return (
             <li key={item} className={right === null ? "" : right ? "right" : "wrong"}>
@@ -50,7 +72,7 @@ function OrderRound({ q, feedback, busy, onAnswer }: RoundProps) {
                 {right === false && solution && <span className="order-fix"> — goes {placeName(solution.indexOf(text))}</span>}
                 {right !== null && <span className="sr-only">{right ? " (right place)" : " (wrong place)"}</span>}
               </span>
-              {!feedback && (
+              {!done && (
                 <span className="order-moves">
                   <button type="button" className="btn btn-light" onClick={() => move(k, k - 1)} disabled={k === 0}>
                     <span aria-hidden="true">↑</span><span className="sr-only">Move {text} up</span>
@@ -66,9 +88,9 @@ function OrderRound({ q, feedback, busy, onAnswer }: RoundProps) {
         })}
       </ol>
       <p className="sr-only" aria-live="polite">{said}</p>
-      {!feedback && (
+      {!done && (
         <button type="submit" className="btn btn-primary activity-check" disabled={busy}>
-          {busy ? "Checking…" : "Check my order"}
+          {busy ? busyLabel : submitLabel}
         </button>
       )}
     </form>

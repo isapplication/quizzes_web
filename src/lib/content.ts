@@ -1,3 +1,5 @@
+import { type EditorQuestion, QTYPE_LABEL, type QType } from "./questionTypes";
+
 export interface QuizSummary {
   quizId: string;
   title: string;
@@ -23,7 +25,7 @@ export interface QuizSummary {
 export interface QuestionView {
   id: string;
   position: number;
-  type: "QUIZ" | "TRUE_FALSE" | "TYPE_ANSWER" | "PUZZLE" | "SLIDER";
+  type: QType;
   text: string;
   timeLimitSeconds: number;
   choices: string[];
@@ -42,13 +44,7 @@ export interface QuizView {
   questions: QuestionView[];
 }
 
-export const TYPE_LABEL: Record<QuestionView["type"], string> = {
-  QUIZ: "Quiz",
-  TRUE_FALSE: "True or false",
-  TYPE_ANSWER: "Type answer",
-  PUZZLE: "Puzzle",
-  SLIDER: "Slider",
-};
+export const TYPE_LABEL: Record<QuestionView["type"], string> = { ...QTYPE_LABEL, QUIZ: "Quiz" };
 
 export function gradeLabel(grade: number): string {
   return grade === 0 ? "Kindergarten" : `Grade ${grade}`;
@@ -62,16 +58,8 @@ export const POINTS: { value: number; label: string }[] = [
   { value: 0, label: "No points" },
 ];
 
-/** One question in the editor; {@code correctIndex} is -1 until the teacher picks the right answer. */
-export interface EditorQuestion {
-  type: "QUIZ" | "TRUE_FALSE";
-  text: string;
-  timeLimitSeconds: number;
-  points: number;
-  choices: string[];
-  correctIndex: number;
-  explanation: string | null;
-}
+/** One question in the editor: the per-type shape and rules live in lib/questionTypes.ts. */
+export type { EditorQuestion } from "./questionTypes";
 
 /** What the editor opens: the draft if there is one, otherwise the published version. */
 export interface Editing {

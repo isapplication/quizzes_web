@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
-import { GAME_MODES, GameTile, GameTimer, TeamBadge, useCountdown } from "@/components/Stage";
+import { GAME_MODES, GameTimer, TeamBadge, useCountdown } from "@/components/Stage";
 import { GameLook } from "@/components/live/GameLook";
 import { Buddy, Confetti } from "@/components/live/LookArt";
 import { LastSecondsTicks, PlayerBadge, SoundToggle } from "@/components/live/GameBits";
@@ -15,6 +15,8 @@ import { MeProvider, ownBrand, ShownBrand, useMe } from "@/lib/me";
 import { formatPin } from "@/lib/pin";
 import { OwnerBrandMark, useOwnerBrand } from "@/components/OwnerBrand";
 import { JoinQr, RoomPatternCard } from "@/components/live/JoinExtras";
+import { HostOpenAnswers, HostResults, HostSlide, type HostClosed, type HostQuestion } from "@/components/live/HostQuestion";
+import { type Pick, pickOf } from "@/lib/questionTypes";
 
 interface Hosted {
   gameId: string;
@@ -56,28 +58,23 @@ interface Ranked {
   score: number;
 }
 
-interface Question {
-  index: number;
+interface Question extends HostQuestion {
   total: number;
-  text: string;
   visual?: string | null;
-  choices: string[];
   openedAt: number;
   closesAt: number;
   /** False in an accuracy game: no countdown, the teacher closes the question. */
   timed?: boolean;
 }
 
-interface Closed {
-  index: number;
-  correctIndex: number;
-  explanation: string | null;
-  counts: number[];
+interface Closed extends HostClosed {
   answered: number;
   leaderboard: Ranked[];
   teams?: TeamStanding[];
   last: boolean;
 }
+
+const pickFor = (q: { pick?: Pick; qtype?: string }): Pick => q.pick ?? pickOf(q.qtype);
 
 type View = "lobby" | "intro" | "question" | "results" | "podium";
 
@@ -135,10 +132,13 @@ function HostScreen() {
         if ((phase === "RESULTS" || phase === "INTRO") && m.lastQuestion) {
           const lq = m.lastQuestion as Record<string, unknown>;
           setQuestion({ index: Number(lq.index), total: Number(m.total), text: String(lq.text), visual: (lq.visual as string) ?? null,
-            choices: lq.choices as string[], openedAt: 0, closesAt: 0 });
+            choices: (lq.choices as string[]) ?? [], openedAt: 0, closesAt: 0, qtype: lq.qtype as string | undefined,
+            pick: lq.pick as Pick | undefined, slider: lq.slider as HostQuestion["slider"], title: lq.title as string | undefined });
           setClosed({ index: Number(lq.index), correctIndex: Number(lq.correctIndex), explanation: (lq.explanation as string) ?? null,
-            counts: lq.counts as number[], answered: 0, leaderboard: (m.leaderboard as Ranked[]) ?? [],
-            teams: (m.teams as TeamStanding[]) ?? undefined, last: Number(lq.index) + 1 >= Number(m.total) });
+            counts: (lq.counts as number[]) ?? [], answered: 0, leaderboard: (m.leaderboard as Ranked[]) ?? [],
+            teams: (m.teams as TeamStanding[]) ?? undefined, last: Number(lq.index) + 1 >= Number(m.total),
+            qtype: lq.qtype as string | undefined, correctIndexes: lq.correctIndexes as number[] | undefined,
+            key: lq.key as HostClosed["key"], stats: lq.stats as HostClosed["stats"] });
           setView("results");
         }
         if (phase === "PODIUM") {
@@ -165,6 +165,8 @@ function HostScreen() {
         setAnswered({ answered: Number(m.answered), expected: Number(m.expected) });
         break;
       case "closed":
+        // A slide has no results: the server moves straight on to the next question.
+        if (m.qtype === "SLIDE") break;
         setClosed(m as unknown as Closed);
         setShowBoard(false);
         setView("results");
@@ -308,7 +310,11 @@ function HostScreen() {
 
         {view === "intro" && intro && <Intro intro={intro} serverNow={serverNow} grade={look} />}
 
-        {view === "question" && question && (
+        {view === "question" && question && pickFor(question) === "none" && (
+          <HostSlide question={question} last={question.index + 1 >= question.total} onNext={() => send("next")} />
+        )}
+
+        {view === "question" && question && pickFor(question) !== "none" && (
           <>
             <div className="gl-row">
               <span className="gl-pill">Question {question.index + 1} of {question.total}</span>
@@ -331,9 +337,7 @@ function HostScreen() {
               </h1>
               <Buddy grade={look} className="gl-buddy-side" />
             </div>
-            <div className="gl-tiles gl-in">
-              {question.choices.map((c, i) => <GameTile key={i} index={i} text={c} />)}
-            </div>
+            <HostOpenAnswers question={question} />
           </>
         )}
 
@@ -353,11 +357,7 @@ function HostScreen() {
               </h1>
               <Buddy grade={look} mood="happy" className="gl-buddy-side" />
             </div>
-            <div className="gl-tiles gl-in">
-              {question.choices.map((c, i) => (
-                <GameTile key={i} index={i} text={c} count={closed.counts[i]} state={i === closed.correctIndex ? "correct" : "dim"} />
-              ))}
-            </div>
+            <HostResults question={question} closed={closed} />
           </>
         )}
 
