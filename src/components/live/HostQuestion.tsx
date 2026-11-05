@@ -15,6 +15,7 @@ export interface HostQuestion {
   qtype?: string;
   pick?: Pick;
   slider?: { min: number; max: number; step: number; unit?: string };
+  categorise?: { categories: string[]; items: string[] };
   title?: string;
 }
 
@@ -82,6 +83,23 @@ export function HostOpenAnswers({ question }: { question: HostQuestion }) {
         <div className="gl-host-panel-big">Put these in the right order</div>
         <ul className="gl-order-chips">
           {question.choices.map((c, i) => <li key={i} style={{ "--i": i } as CSSProperties}>{c}</li>)}
+        </ul>
+      </div>
+    );
+  }
+  if (pick === "categorise" && question.categorise) {
+    return (
+      <div className="gl-card gl-host-panel gl-in">
+        <div className="gl-host-panel-big">Sort items into the right categories</div>
+        <div className="gl-cat-zones">
+          {question.categorise.categories.map((cat, i) => (
+            <div key={i} className="gl-cat-zone">
+              <div className="gl-cat-zone-label">{cat}</div>
+            </div>
+          ))}
+        </div>
+        <ul className="gl-order-chips">
+          {question.categorise.items.map((item, i) => <li key={i} style={{ "--i": i } as CSSProperties}>{item}</li>)}
         </ul>
       </div>
     );
@@ -159,6 +177,31 @@ export function HostResults({ question, closed }: { question: HostQuestion; clos
         <ol className="gl-order-key">
           {(closed.key?.order ?? []).map((item, i) => <li key={i}>{item}</li>)}
         </ol>
+      </div>
+    );
+  }
+
+  if (qtype === "CATEGORISE") {
+    const answered = stats.answered ?? 0;
+    const right = stats.fullyRight ?? 0;
+    const share = percent(right, answered);
+    const cats = closed.key?.categories ?? [];
+    const items = closed.key?.catItems ?? [];
+    return (
+      <div className="gl-card gl-host-panel gl-in">
+        <div className="gl-host-panel-big">{right} of {answered} sorted everything right ({share}%)</div>
+        <div className="gl-share" aria-hidden="true"><span style={{ width: share + "%" }} /></div>
+        <div className="gl-cat-results">
+          {cats.map((cat, ci) => {
+            const here = items.filter((it) => it.category === ci);
+            return (
+              <div key={ci} className="gl-cat-result">
+                <div className="gl-cat-zone-label">{cat}</div>
+                {here.map((it, j) => <span key={j} className="gl-cat-item">{it.text}</span>)}
+              </div>
+            );
+          })}
+        </div>
       </div>
     );
   }

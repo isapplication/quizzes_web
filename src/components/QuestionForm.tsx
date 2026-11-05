@@ -70,6 +70,7 @@ export function QuestionForm({ index, q, total, problem, onChange, onType, onMov
       {q.type === "TYPE_ANSWER" && <AcceptFields accept={q.payload.accept ?? [""]} onChange={(accept) => setPayload({ accept })} />}
       {q.type === "SLIDER" && <SliderFields payload={q.payload} onChange={setPayload} />}
       {q.type === "PUZZLE" && <PuzzleFields items={q.choices} onChange={(choices) => onChange({ choices })} />}
+      {q.type === "CATEGORISE" && <CategoriseFields payload={q.payload} onChange={setPayload} />}
 
       {!slide && (
         <div className="form-grid">
@@ -287,5 +288,90 @@ function PuzzleFields({ items, onChange }: { items: string[]; onChange: (items: 
         <button type="button" className="btn btn-light" onClick={() => onChange([...items, ""])}>+ Add an item</button>
       )}
     </fieldset>
+  );
+}
+
+/** Categorise: 2 to 8 category labels and 2 to 16 items, each assigned to a category. */
+function CategoriseFields({ payload, onChange }: { payload: EditorPayload; onChange: (patch: EditorPayload) => void }) {
+  const id = useId();
+  const categories = payload.categories ?? ["", ""];
+  const catItems = payload.catItems ?? [{ text: "", category: 0 }, { text: "", category: 0 }];
+
+  function setCat(i: number, text: string) {
+    onChange({ categories: categories.map((c, k) => (k === i ? text : c)) });
+  }
+  function removeCat(i: number) {
+    const next = categories.filter((_, k) => k !== i);
+    onChange({
+      categories: next,
+      catItems: catItems.map((it) => ({ ...it, category: it.category === i ? 0 : it.category > i ? it.category - 1 : it.category })),
+    });
+  }
+  function setItem(i: number, text: string) {
+    onChange({ catItems: catItems.map((it, k) => (k === i ? { ...it, text } : it)) });
+  }
+  function setItemCat(i: number, cat: number) {
+    onChange({ catItems: catItems.map((it, k) => (k === i ? { ...it, category: cat } : it)) });
+  }
+  function removeItem(i: number) {
+    onChange({ catItems: catItems.filter((_, k) => k !== i) });
+  }
+
+  return (
+    <>
+      <fieldset className="type-edits" aria-describedby={id + "-cat-hint"}>
+        <legend>Categories</legend>
+        <p className="hint" id={id + "-cat-hint"} style={{ marginTop: 0 }}>
+          {LIMITS.minCategories} to {LIMITS.maxCategories} categories, each up to {LIMITS.categoryLabel} characters.
+        </p>
+        <ul className="edit-rows">
+          {categories.map((c, i) => (
+            <li key={i}>
+              <input type="text" maxLength={LIMITS.categoryLabel} value={c} aria-label={"Category " + (i + 1)}
+                     placeholder={"Category " + (i + 1)} onChange={(e) => setCat(i, e.target.value)} />
+              {categories.length > LIMITS.minCategories && (
+                <button type="button" className="btn btn-light edit-icon" aria-label={"Remove category " + (i + 1)}
+                        onClick={() => removeCat(i)}>×</button>
+              )}
+            </li>
+          ))}
+        </ul>
+        {categories.length < LIMITS.maxCategories && (
+          <button type="button" className="btn btn-light" onClick={() => onChange({ categories: [...categories, ""] })}>
+            + Add a category
+          </button>
+        )}
+      </fieldset>
+      <fieldset className="type-edits" aria-describedby={id + "-item-hint"}>
+        <legend>Items to sort</legend>
+        <p className="hint" id={id + "-item-hint"} style={{ marginTop: 0 }}>
+          {LIMITS.minCatItems} to {LIMITS.maxCatItems} items, each up to {LIMITS.catItem} characters. Assign each item to its correct category.
+        </p>
+        <ul className="edit-rows">
+          {catItems.map((it, i) => (
+            <li key={i} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <input type="text" maxLength={LIMITS.catItem} value={it.text} aria-label={"Item " + (i + 1)}
+                     placeholder={"Item " + (i + 1)} style={{ flex: 1 }} onChange={(e) => setItem(i, e.target.value)} />
+              <select value={it.category} aria-label={"Category for item " + (i + 1)}
+                      onChange={(e) => setItemCat(i, Number(e.target.value))}>
+                {categories.map((c, ci) => (
+                  <option key={ci} value={ci}>{c.trim() || "Category " + (ci + 1)}</option>
+                ))}
+              </select>
+              {catItems.length > LIMITS.minCatItems && (
+                <button type="button" className="btn btn-light edit-icon" aria-label={"Remove item " + (i + 1)}
+                        onClick={() => removeItem(i)}>×</button>
+              )}
+            </li>
+          ))}
+        </ul>
+        {catItems.length < LIMITS.maxCatItems && (
+          <button type="button" className="btn btn-light"
+                  onClick={() => onChange({ catItems: [...catItems, { text: "", category: 0 }] })}>
+            + Add an item
+          </button>
+        )}
+      </fieldset>
+    </>
   );
 }

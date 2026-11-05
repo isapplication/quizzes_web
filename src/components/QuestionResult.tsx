@@ -20,7 +20,7 @@ export interface ReportQuestion {
   counted?: boolean;
   key?: AnswerKey;
   stats?: { answered?: number; exactlyRight?: number; fullyRight?: number; mean?: number | null; min?: number | null;
-    max?: number | null; top?: { text: string; count: number }[]; knew?: number };
+    max?: number | null; top?: { text: string; count: number }[]; knew?: number; catItemCorrect?: number[] };
 }
 
 const CHOICE_REPORT_TYPES = ["QUIZ", "TRUE_FALSE", "MULTI_SELECT", "POLL"];
@@ -110,6 +110,25 @@ export function QuestionResult({ q, people, who = "players" }: { q: ReportQuesti
           {answer && <div>The right order: <strong>{answer}</strong></div>}
           {stats.fullyRight != null && (
             <div>{stats.fullyRight} of {answered} got the whole order right ({percent(stats.fullyRight, answered)}%)</div>
+          )}
+        </>
+      )}
+
+      {type === "CATEGORISE" && q.key?.categories && q.key?.catItems && (
+        <>
+          <div className="cat-result-grid">
+            {q.key.categories.map((cat, ci) => {
+              const here = q.key!.catItems!.filter((it) => it.category === ci);
+              return (
+                <div key={ci} className="cat-result-col">
+                  <strong>{cat}</strong>
+                  {here.map((it, j) => <span key={j} className="chip">{it.text}</span>)}
+                </div>
+              );
+            })}
+          </div>
+          {stats.fullyRight != null && (
+            <div>{stats.fullyRight} of {answered} sorted everything right ({percent(stats.fullyRight, answered)}%)</div>
           )}
         </>
       )}

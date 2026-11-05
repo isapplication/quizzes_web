@@ -30,6 +30,17 @@ describe("fromServer", () => {
     expect(fromServer({ type: "PUZZLE", choices: ["a", "b", "c"], correctIndexes: [0] }).correctIndexes).toEqual([]);
     expect(fromServer({ type: "SOMETHING" }).type).toBe("QUIZ");
   });
+
+  it("reads CATEGORISE payload with categories and items", () => {
+    const e = fromServer({
+      type: "CATEGORISE", text: "Sort these",
+      payload: { categories: ["A", "B"], catItems: [{ text: "x", category: 0 }, { text: "y", category: 1 }] },
+    });
+    expect(e.type).toBe("CATEGORISE");
+    expect(e.payload.categories).toEqual(["A", "B"]);
+    expect(e.payload.catItems).toEqual([{ text: "x", category: 0 }, { text: "y", category: 1 }]);
+    expect(e.correctIndexes).toEqual([]);
+  });
 });
 
 describe("toServer", () => {
@@ -43,6 +54,21 @@ describe("toServer", () => {
   it("keeps correctIndex for quiz and true/false", () => {
     expect(toServer(q("QUIZ", { choices: ["a", "b", "", ""], correctIndexes: [1] })).correctIndex).toBe(1);
     expect(toServer(q("TRUE_FALSE", { correctIndexes: [0] }))).toMatchObject({ choices: ["True", "False"], correctIndex: 0, correctIndexes: [0] });
+  });
+
+  it("sends CATEGORISE payload with trimmed items", () => {
+    const wire = toServer(q("CATEGORISE", {
+      payload: {
+        categories: [" Animals ", "Plants"],
+        catItems: [{ text: " Dog ", category: 0 }, { text: "", category: 1 }, { text: "Rose", category: 1 }],
+      },
+    }));
+    expect(wire.choices).toEqual([]);
+    expect(wire.correctIndexes).toEqual([]);
+    expect(wire.payload).toEqual({
+      categories: ["Animals", "Plants"],
+      catItems: [{ text: "Dog", category: 0 }, { text: "Rose", category: 1 }],
+    });
   });
 
   it("sends each type's payload and no choices where there are none", () => {
@@ -116,6 +142,23 @@ describe("missing (mirrors the contract's limits)", () => {
     expect(missing(q("SLIDE", { text: "", payload: { title: "Photosynthesis" } }))).toBeNull();
     expect(missing(q("SLIDE", { text: "x".repeat(301), payload: { title: "T" } }))).toMatch(/300/);
   });
+
+  it("categorise: 2 to 8 categories, 2 to 16 items, each assigned", () => {
+    const cat = (p: object) => missing(q("CATEGORISE", {
+      payload: {
+        categories: ["Animals", "Plants"],
+        catItems: [{ text: "Dog", category: 0 }, { text: "Rose", category: 1 }],
+        ...p,
+      },
+    }));
+    expect(cat({})).toBeNull();
+    expect(cat({ categories: [""] })).toMatch(/at least two/);
+    expect(cat({ categories: ["A", "A"] })).toMatch(/different/);
+    expect(cat({ catItems: [{ text: "Dog", category: 0 }] })).toMatch(/at least two items/);
+    expect(cat({ catItems: [{ text: "Dog", category: 0 }, { text: "Dog", category: 1 }] })).toMatch(/different/);
+    expect(cat({ catItems: [{ text: "Dog", category: 0 }, { text: "Cat", category: 0 }, { text: "", category: 1 }] })).toMatch(/empty item/);
+    expect(cat({ catItems: [{ text: "Dog", category: 0 }, { text: "Rose", category: 9 }] })).toMatch(/Assign every item/);
+  });
 });
 
 describe("changeType", () => {
@@ -160,6 +203,10 @@ describe("keyText", () => {
     expect(keyText("SLIDER", { answer: 7.5, tol: 0.5, unit: "m" }, [], [], 0.5)).toMatch(/^7[.,]5 m \(± 0[.,]5\)$/);
     expect(keyText("SLIDER", { answer: 4, tol: 0, unit: "" }, [], [], 1)).toBe("4");
     expect(keyText("PUZZLE", { order: ["Seed", "Sprout", "Tree"] }, [], [])).toBe("Seed → Sprout → Tree");
+    expect(keyText("CATEGORISE", {
+      categories: ["Animals", "Plants"],
+      catItems: [{ text: "Dog", category: 0 }, { text: "Rose", category: 1 }],
+    }, [], [])).toBe("Animals: Dog · Plants: Rose");
     expect(keyText("POLL", {}, ["a"], [])).toBeNull();
   });
 });
@@ -182,8 +229,8 @@ describe("small pieces", () => {
   });
 
   it("pick per type matches the contract", () => {
-    expect(["QUIZ", "TRUE_FALSE", "POLL", "MULTI_SELECT", "TYPE_ANSWER", "SLIDER", "PUZZLE", "SLIDE"].map(pickOf))
-      .toEqual(["one", "one", "one", "many", "text", "number", "order", "none"]);
+    expect(["QUIZ", "TRUE_FALSE", "POLL", "MULTI_SELECT", "TYPE_ANSWER", "SLIDER", "PUZZLE", "CATEGORISE", "SLIDE"].map(pickOf))
+      .toEqual(["one", "one", "one", "many", "text", "number", "order", "categorise", "none"]);
   });
 
   it("six different shapes; the room pattern's four come first", () => {

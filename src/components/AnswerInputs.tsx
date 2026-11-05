@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useCallback, useId, useRef, useState } from "react";
 import { AnswerShape, shapeName, shapeNumber } from "./AnswerShape";
 import { GameCheckTile } from "./Stage";
 import { formatNumber, LIMITS, sliderStart, snap, toggle } from "@/lib/questionTypes";
@@ -115,6 +115,111 @@ export function SliderForm({ slider, onSubmit, busy = false, variant }: {
         <span><span className="sr-only">to </span>{formatNumber(slider.max, slider.step, unit)}</span>
       </div>
       <button type="submit" className={submitClass(variant)} disabled={busy}>{busy ? "Sending…" : "Submit " + shown}</button>
+    </form>
+  );
+}
+
+export interface CategoriseShown {
+  categories: string[];
+  items: string[];
+}
+
+/** Categorise: tap an item, then tap a category to place it. Submit when all items are placed. */
+export function CategoriseForm({ data, onSubmit, busy = false, variant }: {
+  data: CategoriseShown;
+  onSubmit: (categories: Record<number, number>) => void;
+  busy?: boolean;
+  variant: Variant;
+}) {
+  const id = useId();
+  // placements[itemIndex] = categoryIndex, or -1 if unplaced
+  const [placements, setPlacements] = useState<number[]>(() => data.items.map(() => -1));
+  const [selected, setSelected] = useState<number | null>(null);
+  const [said, setSaid] = useState("");
+  const dragItem = useRef<number | null>(null);
+
+  const allPlaced = placements.every((p) => p >= 0);
+
+  function place(item: number, cat: number) {
+    setPlacements((p) => p.map((v, i) => (i === item ? cat : v)));
+    setSaid(data.items[item] + " placed in " + data.categories[cat] + ".");
+    setSelected(null);
+  }
+
+  function unplace(item: number) {
+    setPlacements((p) => p.map((v, i) => (i === item ? -1 : v)));
+    setSaid(data.items[item] + " removed.");
+  }
+
+  function tapItem(item: number) {
+    if (selected === item) { setSelected(null); return; }
+    setSelected(item);
+  }
+
+  function tapCategory(cat: number) {
+    if (selected !== null) { place(selected, cat); return; }
+  }
+
+  const onDragStart = useCallback((item: number) => { dragItem.current = item; }, []);
+  const onDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); }, []);
+  const onDrop = useCallback((cat: number) => {
+    if (dragItem.current !== null) { place(dragItem.current, cat); dragItem.current = null; }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function submit() {
+    if (!allPlaced) return;
+    const result: Record<number, number> = {};
+    placements.forEach((cat, item) => { result[item] = cat; });
+    onSubmit(result);
+  }
+
+  const unplaced = data.items.map((_, i) => i).filter((i) => placements[i] < 0);
+
+  return (
+    <form className={variant === "game" ? "gl-form gl-categorise" : "activity-panel stack"}
+          onSubmit={(e) => { e.preventDefault(); submit(); }} aria-describedby={id}>
+      <p id={id} className={variant === "game" ? "gl-sub gl-hint" : "hint"} style={{ margin: 0 }}>
+        Sort each item into the right category, then submit.
+      </p>
+      <div className="cat-zones">
+        {data.categories.map((cat, ci) => {
+          const here = data.items.map((_, i) => i).filter((i) => placements[i] === ci);
+          return (
+            <div key={ci} className={"cat-zone" + (selected !== null ? " cat-zone-target" : "")}
+                 role="group" aria-label={cat}
+                 onClick={() => tapCategory(ci)}
+                 onDragOver={onDragOver} onDrop={() => onDrop(ci)}>
+              <div className="cat-zone-label">{cat}</div>
+              <div className="cat-zone-items">
+                {here.map((item) => (
+                  <button key={item} type="button" className="cat-chip placed" onClick={(e) => { e.stopPropagation(); unplace(item); }}
+                          aria-label={data.items[item] + " in " + cat + ", tap to remove"}>
+                    {data.items[item]}
+                  </button>
+                ))}
+                {here.length === 0 && <span className="cat-zone-empty">Drop items here</span>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {unplaced.length > 0 && (
+        <div className="cat-items">
+          {unplaced.map((item) => (
+            <button key={item} type="button" draggable
+                    className={"cat-chip" + (selected === item ? " cat-chip-selected" : "")}
+                    onClick={() => tapItem(item)}
+                    onDragStart={() => onDragStart(item)}
+                    aria-label={data.items[item] + (selected === item ? " (selected, tap a category)" : "")}>
+              {data.items[item]}
+            </button>
+          ))}
+        </div>
+      )}
+      <p className="sr-only" aria-live="polite">{said}</p>
+      <button type="submit" className={submitClass(variant)} disabled={busy || !allPlaced}>
+        {busy ? "Sending…" : allPlaced ? "Submit" : `Place ${unplaced.length} more`}
+      </button>
     </form>
   );
 }

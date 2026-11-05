@@ -4,12 +4,12 @@
  * normalising). The server decides every score; these helpers only shape what people see and send.
  */
 
-export type QType = "QUIZ" | "TRUE_FALSE" | "MULTI_SELECT" | "POLL" | "TYPE_ANSWER" | "SLIDER" | "PUZZLE" | "SLIDE";
+export type QType = "QUIZ" | "TRUE_FALSE" | "MULTI_SELECT" | "POLL" | "TYPE_ANSWER" | "SLIDER" | "PUZZLE" | "CATEGORISE" | "SLIDE";
 
 /** How a player answers, as the game server says in a question's {@code pick}. */
-export type Pick = "one" | "many" | "text" | "number" | "order" | "none";
+export type Pick = "one" | "many" | "text" | "number" | "order" | "categorise" | "none";
 
-export const QTYPES: QType[] = ["QUIZ", "TRUE_FALSE", "MULTI_SELECT", "POLL", "TYPE_ANSWER", "SLIDER", "PUZZLE", "SLIDE"];
+export const QTYPES: QType[] = ["QUIZ", "TRUE_FALSE", "MULTI_SELECT", "POLL", "TYPE_ANSWER", "SLIDER", "PUZZLE", "CATEGORISE", "SLIDE"];
 
 export const QTYPE_LABEL: Record<QType, string> = {
   QUIZ: "Multiple choice",
@@ -19,6 +19,7 @@ export const QTYPE_LABEL: Record<QType, string> = {
   TYPE_ANSWER: "Type answer",
   SLIDER: "Slider",
   PUZZLE: "Puzzle",
+  CATEGORISE: "Categorise",
   SLIDE: "Slide",
 };
 
@@ -31,6 +32,7 @@ export const QTYPE_HINT: Record<QType, string> = {
   TYPE_ANSWER: "Players type a short answer.",
   SLIDER: "Players pick a number on a scale.",
   PUZZLE: "Players put 3 to 6 items in the right order.",
+  CATEGORISE: "Players sort items into 2 to 8 categories. Partial points.",
   SLIDE: "A screen of information between questions. No answers.",
 };
 
@@ -51,6 +53,12 @@ export const LIMITS = {
   unit: 10,
   maxSteps: 1000,
   typed: 20,
+  minCategories: 2,
+  maxCategories: 8,
+  categoryLabel: 30,
+  minCatItems: 2,
+  maxCatItems: 16,
+  catItem: 40,
 } as const;
 
 /** The slider's settings in the editor; a field is null while it isn't a number yet. */
@@ -72,6 +80,10 @@ export interface EditorPayload {
   tol?: number | null;
   unit?: string;
   title?: string;
+  /** CATEGORISE: the category labels. */
+  categories?: string[];
+  /** CATEGORISE: each item's text (items list) and its correct category index (assignments list). */
+  catItems?: { text: string; category: number }[];
 }
 
 /** One question in the editor. {@code correctIndexes} is empty until the teacher marks the right answer(s). */
@@ -100,6 +112,7 @@ export function pickOf(type: QType | string | undefined): Pick {
     case "TYPE_ANSWER": return "text";
     case "SLIDER": return "number";
     case "PUZZLE": return "order";
+    case "CATEGORISE": return "categorise";
     case "SLIDE": return "none";
     default: return "one";
   }
@@ -121,6 +134,8 @@ export function blank(type: QType): EditorQuestion {
       return { ...base, payload: { min: 0, max: 10, step: 1, answer: null, tol: 0, unit: "" } };
     case "PUZZLE":
       return { ...base, timeLimitSeconds: 30, choices: ["", "", ""] };
+    case "CATEGORISE":
+      return { ...base, timeLimitSeconds: 45, payload: { categories: ["", ""], catItems: [{ text: "", category: 0 }, { text: "", category: 0 }] } };
     case "SLIDE":
       return { ...base, payload: { title: "" } };
   }
@@ -149,6 +164,15 @@ export function fromServer(raw: Record<string, unknown>): EditorQuestion {
     Object.assign(payload, { min: num(p.min), max: num(p.max), step: num(p.step), answer: num(p.answer), tol: num(p.tol),
       unit: typeof p.unit === "string" ? p.unit : "" });
   }
+  if (type === "CATEGORISE") {
+    payload.categories = Array.isArray(p.categories) ? (p.categories as unknown[]).map(String) : ["", ""];
+    payload.catItems = Array.isArray(p.catItems)
+      ? (p.catItems as { text?: unknown; category?: unknown }[]).map((it) => ({
+          text: typeof it.text === "string" ? it.text : "",
+          category: typeof it.category === "number" ? it.category : 0,
+        }))
+      : [{ text: "", category: 0 }, { text: "", category: 0 }];
+  }
   if (type === "SLIDE") payload.title = typeof p.title === "string" ? p.title : "";
   return {
     type,
@@ -156,7 +180,7 @@ export function fromServer(raw: Record<string, unknown>): EditorQuestion {
     timeLimitSeconds: typeof raw.timeLimitSeconds === "number" ? raw.timeLimitSeconds : 20,
     points: typeof raw.points === "number" ? raw.points : 1,
     choices: type === "TRUE_FALSE" ? ["True", "False"] : choices,
-    correctIndexes: type === "POLL" || type === "PUZZLE" ? [] : correctIndexes,
+    correctIndexes: type === "POLL" || type === "PUZZLE" || type === "CATEGORISE" ? [] : correctIndexes,
     payload,
     explanation: typeof raw.explanation === "string" ? raw.explanation : null,
   };
@@ -208,6 +232,16 @@ export function toServer(q: EditorQuestion) {
       correctIndexes = [];
       payload = { title: (q.payload.title ?? "").trim() };
       break;
+    case "CATEGORISE": {
+      const cp = q.payload;
+      choices = [];
+      correctIndexes = [];
+      payload = {
+        categories: (cp.categories ?? []).map((c) => c.trim()),
+        catItems: (cp.catItems ?? []).filter((it) => it.text.trim()).map((it) => ({ text: it.text.trim(), category: it.category })),
+      };
+      break;
+    }
     case "POLL":
     case "PUZZLE":
       correctIndexes = [];
@@ -355,6 +389,25 @@ export function missing(raw: EditorQuestion): string | null {
     if (sameAfterTrim(q.choices)) return "Make every item different.";
     return null;
   }
+
+  if (q.type === "CATEGORISE") {
+    const cats = raw.payload.categories ?? [];
+    const items = raw.payload.catItems ?? [];
+    const filledCats = cats.filter((c) => c.trim());
+    if (filledCats.length < LIMITS.minCategories) return "Add at least two categories.";
+    if (cats.length > LIMITS.maxCategories) return `A question can have at most ${LIMITS.maxCategories} categories. Remove one.`;
+    if (cats.some((c) => !c.trim())) return "Fill in or remove the empty category.";
+    if (cats.some((c) => c.trim().length > LIMITS.categoryLabel)) return `Shorten each category to ${LIMITS.categoryLabel} characters or fewer.`;
+    if (sameAfterTrim(cats)) return "Make every category different.";
+    const filledItems = items.filter((it) => it.text.trim());
+    if (filledItems.length < LIMITS.minCatItems) return "Add at least two items to sort.";
+    if (items.length > LIMITS.maxCatItems) return `A question can have at most ${LIMITS.maxCatItems} items. Remove one.`;
+    if (items.some((it) => !it.text.trim())) return "Fill in or remove the empty item.";
+    if (items.some((it) => it.text.trim().length > LIMITS.catItem)) return `Shorten each item to ${LIMITS.catItem} characters or fewer.`;
+    if (sameAfterTrim(items.map((it) => it.text))) return "Make every item different.";
+    if (filledItems.some((it) => it.category < 0 || it.category >= cats.length)) return "Assign every item to a category.";
+    return null;
+  }
   return null;
 }
 
@@ -365,6 +418,8 @@ export interface AnswerKey {
   tol?: number;
   unit?: string;
   order?: string[];
+  categories?: string[];
+  catItems?: { text: string; category: number }[];
 }
 
 /** The right answer in words, for the player's result and the host's results: "7.5 m (± 0.5)", "Seed → Sprout → Tree". */
@@ -384,6 +439,12 @@ export function keyText(qtype: QType | string, key: AnswerKey | null | undefined
     }
     case "PUZZLE":
       return key?.order?.length ? key.order.join(" → ") : null;
+    case "CATEGORISE":
+      if (!key?.categories?.length || !key?.catItems?.length) return null;
+      return key.categories.map((cat, ci) => {
+        const items = key.catItems!.filter((it) => it.category === ci).map((it) => it.text);
+        return cat + ": " + (items.length ? items.join(", ") : "—");
+      }).join(" · ");
     default: {
       const picked = correctIndexes.filter((i) => i >= 0 && i < choices.length).map((i) => choices[i]);
       return picked.length ? picked.join(", ") : null;

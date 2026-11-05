@@ -6,6 +6,7 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { AppFrame } from "@/components/AppFrame";
 import { JoinSuggestion, LinkAccountOffer } from "@/components/MembershipBanners";
 import { StarterShelf } from "@/components/StarterShelf";
+import { TemplateSelector } from "@/components/TemplateSelector";
 import { normalizePin } from "@/lib/pin";
 import { api, ApiError } from "@/lib/api";
 import { gradeLabel, QuizSummary } from "@/lib/content";
@@ -67,6 +68,7 @@ function TeacherHome() {
   const tab: Tab = asked && TABS.some((t) => t.id === asked) ? asked : "quizzes";
   const [grades, setGrades] = useState<number[]>(me.school.grades);
   const [changing, setChanging] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
   const canPick = isIndependent(me) || isSchoolAdmin(me);
   const firstVisit = canPick && grades.length === 0;
 
@@ -74,7 +76,14 @@ function TeacherHome() {
     <div className="stack">
       <PageHeader title={"Welcome, " + me.name}
                   description={<>{me.school.name}{me.classes.length > 0 && <> · Classes {me.classes.join(", ")}</>}</>}
-                  action={<Link className="btn btn-primary" href="/teacher/quiz/new">Create a quiz</Link>} />
+                  action={
+                    <div className="row" style={{ gap: 8 }}>
+                      <button type="button" className="btn btn-light" onClick={() => setShowTemplates(true)}>Quick Launch</button>
+                      <Link className="btn btn-primary" href="/teacher/quiz/new">Create a quiz</Link>
+                    </div>
+                  } />
+      <TemplateSelector grade={me.grade ?? (grades[0] ?? 5)} open={showTemplates} onClose={() => setShowTemplates(false)}
+                        onSelect={(quiz) => { setShowTemplates(false); router.push("/teacher/quiz/new?template=" + encodeURIComponent(JSON.stringify(quiz))); }} />
       {(firstVisit || changing) && (
         <FirstVisit school={!isIndependent(me)} current={grades} changing={changing}
                     onDone={(g) => { setGrades(g); setChanging(false); }} onCancel={() => setChanging(false)} />

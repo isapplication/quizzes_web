@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { GameTile, GameTimer, ordinal, TeamBadge, useCountdown } from "./Stage";
 import { AnswerShape, shapeNumber } from "./AnswerShape";
 import { OrderList } from "./ActivityRound";
-import { MultiSelectForm, type SliderShown, SliderForm, TypeAnswerForm } from "./AnswerInputs";
+import { CategoriseForm, type CategoriseShown, MultiSelectForm, type SliderShown, SliderForm, TypeAnswerForm } from "./AnswerInputs";
 import { type AnswerKey, formatNumber, keyText, outcomeOf, type Pick, pickOf } from "@/lib/questionTypes";
 import { GameLook } from "@/components/live/GameLook";
 import { Buddy, Confetti } from "@/components/live/LookArt";
@@ -30,6 +30,8 @@ interface Question {
   pick?: Pick;
   /** SLIDER: the scale, without the answer. */
   slider?: SliderShown;
+  /** CATEGORISE: categories and shuffled items, without the correct assignments. */
+  categorise?: CategoriseShown;
   /** SLIDE: its title (the text is the body). */
   title?: string;
 }
@@ -328,6 +330,11 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
               <OrderList key={question.index} items={question.choices} busy={false} className="gl-card gl-order stack"
                          submitLabel="Lock in my order"
                          onSubmit={(order) => send({ answer: { order } }, { shape: null, text: order.map((i) => question.choices[i]).join(" → ") })} />
+            )}
+            {pick === "categorise" && question.categorise && (
+              <CategoriseForm key={question.index} variant="game" data={question.categorise}
+                              onSubmit={(categories) => send({ answer: { categories } },
+                                { shape: null, text: Object.keys(categories).length + " items sorted" })} />
             )}
           </>
         )}
