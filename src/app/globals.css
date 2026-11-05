@@ -84,12 +84,19 @@ th { background: var(--plc); color: var(--sc); font-weight: 600; }
 .choice-list li.correct { border-color: var(--success); background: #eef8f0; }
 .correct-label { margin-left: auto; color: var(--success); font-size: 13px; }
 
-.draft { border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; display: grid; gap: 8px; }
+.draft { border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
 .draft.removed { display: flex; justify-content: space-between; align-items: center; background: var(--page); }
-.choice-edit { display: grid; gap: 6px; }
-.choice-edit label { display: flex; align-items: center; gap: 8px; font-weight: 400; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; }
+.choice-edit { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+.choice-edit label { display: flex; align-items: center; gap: 8px; min-inline-size: 0; font-weight: 400; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; }
 .choice-edit label.correct { border-color: var(--success); background: #eef8f0; }
-.choice-edit input[type=text] { flex: 1; padding: 6px 8px; }
+.choice-edit input[type=text] { flex: 1; min-inline-size: 0; padding: 6px 8px; }
+/* AI Studio: which question types to draft. A native checkbox group, tinted with the school's colour. */
+.type-pick { border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 12px 10px; margin: 0; min-width: 0; accent-color: var(--pc); }
+.type-pick legend { font-weight: 600; padding: 0 4px; }
+.type-pick-options { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.type-pick-options label { display: inline-flex; align-items: center; gap: 6px; font-weight: 400; min-block-size: 36px; }
+.type-pick-options input { inline-size: 18px; block-size: 18px; margin: 0; }
+.type-pick .hint { margin: 4px 0 0; }
 details summary { cursor: pointer; color: var(--sc); font-weight: 600; }
 
 /* ---- Live game: classroom screen and student devices ---- */

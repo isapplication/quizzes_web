@@ -8,6 +8,7 @@ import { api } from "@/lib/api";
 import { gradeLabel } from "@/lib/content";
 import { useMe } from "@/lib/me";
 import { PageHeader } from "@/components/ui/States";
+import { type AnswerKey, keyText, QTYPE_HINT, QTYPE_LABEL, type QType } from "@/lib/questionTypes";
 
 interface StudioStatus {
   mode: "LIVE" | "SAMPLE";
@@ -16,11 +17,14 @@ interface StudioStatus {
   notice: string | null;
 }
 
+/** A draft in the editor's shape (wave1b-contract.md): a puzzle's choices are its items in the right order. */
 interface DraftQuestion {
-  type: "QUIZ" | "TRUE_FALSE";
+  type: QType;
   text: string;
   choices: string[];
   correctIndex: number;
+  correctIndexes?: number[];
+  payload?: { accept?: string[]; min?: number; max?: number; step?: number; answer?: number; tol?: number; unit?: string };
   explanation: string;
   timeLimitSeconds: number;
 }
@@ -51,6 +55,9 @@ interface Run {
 }
 
 const SUBJECTS = ["Math", "Science", "ELA", "Social Studies"];
+/** The types AI Studio can write: every type with a right answer its check can test (not polls or slides). */
+const WRITABLE: QType[] = ["QUIZ", "TRUE_FALSE", "MULTI_SELECT", "TYPE_ANSWER", "SLIDER", "PUZZLE"];
+const DEFAULT_TYPES: QType[] = ["QUIZ", "TRUE_FALSE"];
 const TIMES = [10, 20, 30, 45, 60];
 
 export default function StudioPage() {
@@ -69,6 +76,7 @@ function Studio() {
   const [grade, setGrade] = useState(8);
   const [subject, setSubject] = useState("Science");
   const [classCode, setClassCode] = useState("");
+  const [types, setTypes] = useState<QType[]>(DEFAULT_TYPES);
   const [runId, setRunId] = useState<string | null>(null);
   const [run, setRun] = useState<Run | null>(null);
   const [kept, setKept] = useState<Record<number, DraftQuestion>>({});
@@ -128,7 +136,7 @@ function Studio() {
     try {
       const r = await api<{ runId: string }>("/api/v1/ai/drafts", {
         method: "POST",
-        body: { topic, grade, subject, count: 10, classCode: classCode || null },
+        body: { topic, grade, subject, count: 10, classCode: classCode || null, types },
       });
       setRunId(r.runId);
     } catch (err) {
@@ -218,8 +226,27 @@ function Studio() {
               </select>
             </>
           )}
+        </div>
+        <fieldset className="type-pick">
+          <legend>Question types</legend>
+          <div className="type-pick-options">
+            {WRITABLE.map((t) => (
+              <label key={t} title={QTYPE_HINT[t]}>
+                <input type="checkbox" name="types" value={t} checked={types.includes(t)}
+                       onChange={(e) => setTypes((now) => e.target.checked ? WRITABLE.filter((x) => x === t || now.includes(x))
+                         : now.filter((x) => x !== t))} />
+                {QTYPE_LABEL[t]}
+              </label>
+            ))}
+          </div>
+          <p className="hint" id="type-pick-hint">
+            {types.length === 0 ? "Pick at least one type." : "Claude mixes the types you pick. Every question is checked the same way."}
+          </p>
+        </fieldset>
+        <div className="row">
           <span className="spacer" />
-          <button className="btn btn-primary" type="submit" disabled={busy || topic.trim().length < 3}>
+          <button className="btn btn-primary" type="submit" disabled={busy || topic.trim().length < 3 || types.length === 0}
+                  aria-describedby="type-pick-hint">
             Draft 10 questions
           </button>
         </div>
@@ -276,7 +303,7 @@ function Studio() {
 
           {dropped.length > 0 && (
             <details>
-              <summary>Why {dropped.length} drafts were dropped</summary>
+              <summary>Why {dropped.length} {dropped.length === 1 ? "draft was" : "drafts were"} dropped</summary>
               <ul>
                 {dropped.map((d) => (
                   <li key={d.position} style={{ margin: "8px 0" }}>
@@ -333,10 +360,25 @@ function DraftEditor({
     );
   }
   const tf = value.type === "TRUE_FALSE";
+  const multi = value.type === "MULTI_SELECT";
+  const withOptions = value.type === "QUIZ" || tf || multi;
+  const right = multi ? value.correctIndexes ?? [] : [value.correctIndex];
+  const key: AnswerKey = value.type === "PUZZLE" ? { order: value.choices }
+    : { accept: value.payload?.accept, answer: value.payload?.answer, tol: value.payload?.tol, unit: value.payload?.unit };
+  const answer = withOptions ? null : keyText(value.type, key, value.choices, right, value.payload?.step ?? 1);
+  function mark(i: number) {
+    if (!value) return;
+    if (!multi) {
+      onChange({ ...value, correctIndex: i });
+      return;
+    }
+    const now = value.correctIndexes ?? [];
+    onChange({ ...value, correctIndexes: now.includes(i) ? now.filter((x) => x !== i) : [...now, i].sort((a, b) => a - b) });
+  }
   return (
     <div className="draft">
       <div className="row">
-        <span className="chip">{tf ? "True or false" : "Quiz"}</span>
+        <span className="chip">{QTYPE_LABEL[value.type] ?? value.type}</span>
         <span className="chip" style={{ background: "#e6f5ea", color: "var(--success)" }}>
           ✓ Passed both checks
         </span>
@@ -364,36 +406,45 @@ function DraftEditor({
         onChange={(e) => onChange({ ...value, text: e.target.value })}
         style={{ width: "100%", fontWeight: 600 }}
       />
-      <div className="choice-edit">
-        {value.choices.map((c, i) => (
-          <label key={i} className={i === value.correctIndex ? "correct" : ""}>
-            <input
-              type="radio"
-              name={"correct-" + draft.position}
-              checked={i === value.correctIndex}
-              onChange={() => onChange({ ...value, correctIndex: i })}
-              aria-label={"Mark option " + (i + 1) + " as correct"}
-            />
-            <AnswerShape index={i} size={16} />
-            {tf ? (
-              <span>{c}</span>
-            ) : (
+      {withOptions && (
+        <div className="choice-edit">
+          {value.choices.map((c, i) => (
+            <label key={i} className={right.includes(i) ? "correct" : ""}>
               <input
-                type="text"
-                maxLength={75}
-                value={c}
-                aria-label={"Option " + (i + 1)}
-                onChange={(e) => {
-                  const choices = [...value.choices];
-                  choices[i] = e.target.value;
-                  onChange({ ...value, choices });
-                }}
+                type={multi ? "checkbox" : "radio"}
+                name={"correct-" + draft.position}
+                checked={right.includes(i)}
+                onChange={() => mark(i)}
+                aria-label={"Mark option " + (i + 1) + " as correct"}
               />
-            )}
-            {i === value.correctIndex && <strong className="correct-label">✓ Correct</strong>}
-          </label>
-        ))}
-      </div>
+              <AnswerShape index={i} size={16} />
+              {tf ? (
+                <span>{c}</span>
+              ) : (
+                <input
+                  type="text"
+                  maxLength={75}
+                  value={c}
+                  aria-label={"Option " + (i + 1)}
+                  onChange={(e) => {
+                    const choices = [...value.choices];
+                    choices[i] = e.target.value;
+                    onChange({ ...value, choices });
+                  }}
+                />
+              )}
+              {right.includes(i) && <strong className="correct-label">✓ Correct</strong>}
+            </label>
+          ))}
+        </div>
+      )}
+      {answer && (
+        <p style={{ margin: 0 }}>
+          {value.type === "TYPE_ANSWER" ? "Accepted: " : value.type === "PUZZLE" ? "The right order: " : "The answer: "}
+          <strong>{answer}</strong>
+          <span className="hint"> You can change it in the quiz editor after publishing.</span>
+        </p>
+      )}
       <input
         type="text"
         aria-label="Explanation"

@@ -166,7 +166,7 @@ function ChoiceFields({ q, onChange }: { q: EditorQuestion; onChange: (patch: Pa
   );
 }
 
-/** Type answer: 1 to 5 accepted texts, each up to 20 characters. */
+/** Type answer: 1 to 10 accepted texts, each up to 20 characters. */
 function AcceptFields({ accept, onChange }: { accept: string[]; onChange: (accept: string[]) => void }) {
   const id = useId();
   return (

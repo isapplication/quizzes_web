@@ -41,7 +41,7 @@ export const LIMITS = {
   minChoices: 2,
   maxChoices: 6,
   minAccept: 1,
-  maxAccept: 5,
+  maxAccept: 10,
   accept: 20,
   minItems: 3,
   maxItems: 6,
@@ -319,7 +319,7 @@ export function missing(raw: EditorQuestion): string | null {
     const accept = all.filter((a) => a !== "");
     if (accept.length < LIMITS.minAccept) return "Add at least one accepted answer.";
     if (all.length > accept.length) return "Fill in or remove the empty accepted answer.";
-    if (accept.length > LIMITS.maxAccept) return "A question can accept at most five answers. Remove one.";
+    if (accept.length > LIMITS.maxAccept) return "A question can accept at most " + LIMITS.maxAccept + " answers. Remove one.";
     if (accept.some((a) => a.length > LIMITS.accept)) return `Shorten each accepted answer to ${LIMITS.accept} characters or fewer.`;
     if (new Set(accept.map(normaliseTyped)).size !== accept.length) {
       return "Two accepted answers are the same once capitals and end punctuation are ignored. Remove one.";

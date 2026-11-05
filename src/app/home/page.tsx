@@ -9,7 +9,7 @@ import { StarterShelf } from "@/components/StarterShelf";
 import { normalizePin } from "@/lib/pin";
 import { api, ApiError } from "@/lib/api";
 import { gradeLabel, QuizSummary } from "@/lib/content";
-import { AssignmentSummary, dueText, MyAssignment } from "@/lib/assignments";
+import { AssignmentSummary, dueText, MyAssignment, rightText } from "@/lib/assignments";
 import { isIndependent, isSchoolAdmin, isStaff, useMe } from "@/lib/me";
 import { GRADES } from "@/lib/school";
 import { EmptyState, LoadingState, PageHeader } from "@/components/ui/States";
@@ -510,7 +510,8 @@ function MyAssignments() {
               <strong>{a.title}</strong>
               <div className="muted" style={{ fontSize: 14 }}>
                 {a.questions} questions{a.dueAt && <> · {dueText(a.dueAt)}</>}
-                {a.status === "DONE" && <> · {a.correct} right, {a.score} points</>}
+                {a.status === "DONE" && <> · {[a.scored !== undefined ? rightText(a) : a.correct + " right", a.score + " points"]
+                  .filter(Boolean).join(", ")}</>}
               </div>
             </div>
             {a.status === "DONE" ? <span className="chip chip-ok">Done</span>

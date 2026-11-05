@@ -1,4 +1,5 @@
 /** Assignments: a quiz done at each student's own pace, by link or for a class (starter-library plan, Step 3a). */
+import type { ReportQuestion } from "@/components/QuestionResult";
 import type { ShownBrand } from "@/lib/me";
 import type { AnswerKey, Pick } from "@/lib/questionTypes";
 
@@ -21,13 +22,30 @@ export interface AssignmentSummary {
 
 export interface AssignmentResults {
   assignment: AssignmentSummary;
+  /**
+   * {@code correct} of {@code scored}: the questions that count towards "right" (not polls, slides or flashcards);
+   * {@code cardsKnown} of {@code cards}: the flashcards the student knew.
+   */
   attempts: { name: string; guest: boolean; score: number; correct: number; answered: number; questions: number;
-    startedAt: string; finishedAt: string | null }[];
-  questions: { number: number; text: string; choices: string[]; correctIndex: number; counts: number[]; answered: number;
-    percentCorrect: number }[];
+    startedAt: string; finishedAt: string | null; scored?: number; cards?: number; cardsKnown?: number }[];
+  /** Per type, as a live game's report (slides left out, polls not counted). */
+  questions: ReportQuestion[];
 }
 
 /** A student's own: {@code status} NOT_STARTED, IN_PROGRESS or DONE. */
+/**
+ * How an attempt went, in words: "5 of 5 right", "knew 6 of 8 cards", both for a mix, or null when nothing is scored
+ * and there are no cards (only polls or slides), so no screen says "0 of 0 right".
+ */
+export function rightText(r: { correct: number | null; scored?: number | null; cards?: number | null;
+  cardsKnown?: number | null; questions?: number }): string | null {
+  const cards = r.cards ?? 0;
+  const scored = r.scored ?? r.questions ?? 0;
+  const knew = cards > 0 ? "knew " + (r.cardsKnown ?? 0) + " of " + cards + " cards" : null;
+  const right = scored > 0 ? (r.correct ?? 0) + " of " + scored + " right" : null;
+  return [right, knew].filter(Boolean).join(" · ") || null;
+}
+
 export interface MyAssignment {
   code: string;
   title: string;
@@ -38,6 +56,10 @@ export interface MyAssignment {
   score: number | null;
   correct: number | null;
   questions: number;
+  /** Once started: the questions that count towards "right", and the flashcards known (missing from an older server). */
+  scored?: number | null;
+  cards?: number | null;
+  cardsKnown?: number | null;
 }
 
 export interface PlayInfo {
@@ -84,6 +106,11 @@ export interface PlayState {
   correct: number;
   finished: boolean;
   question: PlayQuestion | null;
+  /** The questions that count towards "right": not polls, slides or flashcards. Missing from an older server. */
+  scored?: number;
+  /** The attempt's flashcards, and how many the student knew. */
+  cards?: number;
+  cardsKnown?: number;
 }
 
 export interface Answered {

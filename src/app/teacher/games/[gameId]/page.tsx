@@ -3,12 +3,11 @@
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AppFrame } from "@/components/AppFrame";
-import { AnswerShape } from "@/components/AnswerShape";
+import { QuestionResult, type ReportQuestion } from "@/components/QuestionResult";
 import { GAME_MODES, TeamBadge } from "@/components/Stage";
 import { api, ApiError } from "@/lib/api";
 import { tabKey } from "@/lib/tab";
 import { EmptyState, LoadingState, PageHeader } from "@/components/ui/States";
-import { type AnswerKey, formatNumber, keyText, percent, QTYPE_LABEL, type QType } from "@/lib/questionTypes";
 
 interface Report {
   gameId: string;
@@ -27,24 +26,6 @@ interface Report {
   /** Team games: teams by their members' average score. */
   teams: { rank: number; team: number; score: number; players: number }[];
   questions: ReportQuestion[];
-}
-
-/** One question's results. Wave 1b adds every correct choice, whether it is scored (a poll isn't), its answer key and per-type stats. */
-interface ReportQuestion {
-  number: number;
-  text: string;
-  type: string | null;
-  choices: string[];
-  correctIndex: number;
-  correctIndexes?: number[];
-  counts: number[];
-  answered: number;
-  correct: number;
-  percentCorrect: number;
-  counted?: boolean;
-  key?: AnswerKey;
-  stats?: { answered?: number; exactlyRight?: number; fullyRight?: number; mean?: number; min?: number; max?: number;
-    top?: { text: string; count: number }[] };
 }
 
 export default function GameReportPage() {
@@ -156,102 +137,10 @@ function GameReport() {
 
           <h2>Questions</h2>
           <ol className="question-list">
-            {report.questions.map((q) => <QuestionResult key={q.number} q={q} players={s.players} />)}
+            {report.questions.map((q) => <QuestionResult key={q.number} q={q} people={s.players} />)}
           </ol>
         </>
       )}
     </div>
-  );
-}
-
-const CHOICE_REPORT_TYPES = ["QUIZ", "TRUE_FALSE", "MULTI_SELECT", "POLL"];
-const num = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 2 });
-
-/**
- * One question's results, by type: answer bars for choice questions (every right answer marked, none for a poll), the
- * most common texts for a typed answer, the spread for a slider and the share fully right for a puzzle.
- */
-function QuestionResult({ q, players }: { q: ReportQuestion; players: number }) {
-  const type = (q.type ?? "QUIZ") as QType;
-  const counted = q.counted !== false;
-  const right = q.correctIndexes ?? (q.correctIndex >= 0 ? [q.correctIndex] : []);
-  const stats = q.stats ?? {};
-  const answered = stats.answered ?? q.answered;
-  const answer = keyText(type, q.key, q.choices, right);
-  const most = Math.max(1, ...q.counts);
-  return (
-    <li className="card stack" style={{ gap: 8 }}>
-      <div className="row" style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
-        <strong>{q.text}</strong>
-        <span className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-          <span className="chip">{QTYPE_LABEL[type] ?? type}</span>
-          {counted ? (
-            <span className={"chip " + (q.percentCorrect >= 70 ? "chip-ok" : q.percentCorrect >= 40 ? "chip-warn" : "chip-danger")}>
-              {q.percentCorrect}% correct
-            </span>
-          ) : <span className="chip">No right answer</span>}
-        </span>
-      </div>
-
-      {CHOICE_REPORT_TYPES.includes(type) && (
-        <ul className="report-answers">
-          {q.choices.map((c, i) => {
-            const isRight = counted && right.includes(i);
-            return (
-              <li key={i} className={isRight ? "correct" : ""}>
-                <AnswerShape index={i} size={16} />
-                <span className="report-answer-text">{c}{isRight && <strong> ✓<span className="sr-only"> right answer</span></strong>}</span>
-                <span className="report-bar" aria-hidden="true">
-                  <span style={{ width: (100 * (q.counts[i] ?? 0)) / most + "%", background: `var(--a${(i % 6) + 1})` }} />
-                </span>
-                <span className="report-count">{q.counts[i] ?? 0}</span>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-      {type === "MULTI_SELECT" && stats.exactlyRight !== undefined && (
-        <div>{stats.exactlyRight} of {answered} picked exactly the right answers ({percent(stats.exactlyRight, answered)}%)</div>
-      )}
-
-      {type === "TYPE_ANSWER" && (
-        <>
-          {answer && <div>Accepted: <strong>{answer}</strong></div>}
-          {stats.top && stats.top.length > 0 && (
-            <ul className="report-answers">
-              {stats.top.map((t) => (
-                <li key={t.text} className="report-typed">
-                  <span className="report-answer-text">{t.text}</span>
-                  <span className="report-bar" aria-hidden="true">
-                    <span style={{ width: (100 * t.count) / Math.max(1, stats.top![0].count) + "%", background: "var(--a1)" }} />
-                  </span>
-                  <span className="report-count">{t.count}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </>
-      )}
-
-      {type === "SLIDER" && (
-        <>
-          {answer && <div>The answer: <strong>{answer}</strong></div>}
-          {stats.mean !== undefined && answered > 0 && (
-            <div>Average {formatNumber(stats.mean, 0.1, q.key?.unit ?? "")} · lowest {num(stats.min ?? 0)} · highest {num(stats.max ?? 0)}</div>
-          )}
-        </>
-      )}
-
-      {type === "PUZZLE" && (
-        <>
-          {answer && <div>The right order: <strong>{answer}</strong></div>}
-          {stats.fullyRight !== undefined && (
-            <div>{stats.fullyRight} of {answered} got the whole order right ({percent(stats.fullyRight, answered)}%)</div>
-          )}
-        </>
-      )}
-
-      <div className="muted">{q.answered} of {players} answered</div>
-    </li>
   );
 }

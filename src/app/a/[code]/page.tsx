@@ -121,7 +121,8 @@ export default function AssignmentPage() {
   const rightChoices = feedback ? feedback.correctIndexes ?? (feedback.correctIndex >= 0 ? [feedback.correctIndex] : []) : [];
   const answerWords = feedback && q && (outcome === "wrong" || outcome === "partial") && (pick === "text" || pick === "number" || pick === "many")
     ? keyText(q.type, feedback.key, q.choices, rightChoices, q.slider?.step ?? 1) : null;
-  const step = q?.type === "CARD" ? "Card" : activity ? "Round" : "Question";
+  // A puzzle is a question like any other in a quiz (Wave 1b); matching and flashcards stay activity rounds.
+  const step = q?.type === "CARD" ? "Card" : activity && q?.type !== "PUZZLE" ? "Round" : "Question";
   return (
     <div className="stage">
       <div className="stage-bar">
@@ -195,7 +196,7 @@ export default function AssignmentPage() {
             {feedback && (
               <div className="row" style={{ justifyContent: "center" }}>
                 <button type="button" className="btn btn-primary" style={{ fontSize: 20 }} onClick={next} autoFocus>
-                  {feedback.state.finished ? "See how you did" : "Next round"}
+                  {feedback.state.finished ? "See how you did" : step === "Question" ? "Next question" : "Next round"}
                 </button>
               </div>
             )}
@@ -274,9 +275,16 @@ export default function AssignmentPage() {
           <div className="feedback neutral">
             Done, {state.name}!
             <div style={{ fontSize: 18, fontWeight: 400 }}>
-              {lastType === "CARD"
-                ? <>You knew {state.correct} of {state.total} cards. Go back over the others another time.</>
-                : <>{state.correct} of {state.total} right · {state.score} points</>}
+              {state.cards !== undefined
+                ? (state.scored === 0 && state.cards > 0
+                  ? <>You knew {state.cardsKnown} of {state.cards} cards. Go back over the others another time.</>
+                  : state.scored === 0
+                    ? <>{state.score} points</>
+                    : <>{state.correct} of {state.scored} right · {state.score} points
+                      {state.cards > 0 && <> · you knew {state.cardsKnown} of {state.cards} cards</>}</>)
+                : lastType === "CARD"
+                  ? <>You knew {state.correct} of {state.total} cards. Go back over the others another time.</>
+                  : <>{state.correct} of {state.scored ?? state.total} right · {state.score} points</>}
             </div>
             <div style={{ fontSize: 16, fontWeight: 400 }}>Your teacher can see your answers.</div>
           </div>

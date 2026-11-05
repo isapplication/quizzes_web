@@ -78,10 +78,12 @@ describe("missing (mirrors the contract's limits)", () => {
     expect(missing(q("POLL", { choices: ["Yes", "No"] }))).toBeNull();
   });
 
-  it("type answer: 1 to 5 texts of up to 20 characters, different once normalised", () => {
+  it("type answer: 1 to 10 texts of up to 20 characters, different once normalised", () => {
     expect(missing(q("TYPE_ANSWER", { payload: { accept: [""] } }))).toBe("Add at least one accepted answer.");
     expect(missing(q("TYPE_ANSWER", { payload: { accept: ["x".repeat(21)] } }))).toMatch(/20 characters/);
-    expect(missing(q("TYPE_ANSWER", { payload: { accept: ["a", "b", "c", "d", "e", "f"] } }))).toMatch(/at most five/);
+    expect(missing(q("TYPE_ANSWER", { payload: { accept: ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"] } }))).toBeNull();
+    expect(missing(q("TYPE_ANSWER", { payload: { accept: ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"] } })))
+      .toMatch(/at most 10/);
     expect(missing(q("TYPE_ANSWER", { payload: { accept: ["Paris", "paris!"] } }))).toMatch(/the same/);
     expect(missing(q("TYPE_ANSWER", { payload: { accept: ["Paris", ""] } }))).toMatch(/empty accepted/);
     expect(missing(q("TYPE_ANSWER", { payload: { accept: ["Paris", "Lutetia"] } }))).toBeNull();
