@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Band } from "@/lib/gameLook";
 
 /**
@@ -8,6 +8,10 @@ import type { Band } from "@/lib/gameLook";
  * marimba for K–2, bright tones for 3–5, 8-bit blips for 6–8 and quiet chimes for 9–12. The host screen plays the
  * lobby tune, the reveal and the podium fanfare; every player's phone plays its own taps, ticks and right/wrong
  * sounds. The mute choice is kept on each device.
+ *
+ * Lobby music (wave2-plan.md, W36): the host picks one of the four family tunes, or none, and a volume, for any look; the
+ * choice is kept on the host's device. All of it is made here, so there are no audio files and nothing to license. Sound
+ * starts only after a tap or key press (a browser's rule), and the sound switch mutes the music too.
  */
 export type GameSoundName =
   | "lobby" | "tick" | "reveal" | "fanfare"
@@ -33,7 +37,8 @@ export function unlockGameSound() {
   if (shared.state === "suspended") void shared.resume();
 }
 
-function play(ctx: AudioContext, band: Band, sound: GameSoundName) {
+/** `level`: 0 to 1, the share of the family's usual volume (the host's volume control; 1 for everything else). */
+function play(ctx: AudioContext, band: Band, sound: GameSoundName, level = 1) {
   const { wave, volume, base } = VOICE[band];
   const note = (semitones: number, at: number, length: number, v = volume) => {
     const osc = ctx.createOscillator();
@@ -42,7 +47,7 @@ function play(ctx: AudioContext, band: Band, sound: GameSoundName) {
     osc.type = wave;
     osc.frequency.value = base * Math.pow(2, semitones / 12);
     gain.gain.setValueAtTime(0, t);
-    gain.gain.linearRampToValueAtTime(v, t + 0.01);
+    gain.gain.linearRampToValueAtTime(Math.max(0.0002, v * level), t + 0.01);
     gain.gain.exponentialRampToValueAtTime(0.0001, t + length);
     osc.connect(gain).connect(ctx.destination);
     osc.start(t);
@@ -82,6 +87,59 @@ function play(ctx: AudioContext, band: Band, sound: GameSoundName) {
       else run([0, 4, 7, 4, 9, 7, 4, 2, 0, 4, 7, 12, 9, 7, 4, 0], 0.16, 0.2, volume * 0.7);
       break;
   }
+}
+
+/** The four built-in lobby tunes, one per family, and "none". Any tune plays in any look. */
+export type LobbyTune = Band | "off";
+
+export const LOBBY_TUNES: { value: LobbyTune; label: string }[] = [
+  { value: "k2", label: "Playful marimba (Kindergarten to 2)" },
+  { value: "e35", label: "Bright tones (3 to 5)" },
+  { value: "m68", label: "Retro blips (6 to 8)" },
+  { value: "h912", label: "Calm chimes (9 to 12)" },
+  { value: "off", label: "No music" },
+];
+
+export interface LobbyMusic {
+  /** The host's tune; null until they choose, which plays the game's own family tune. */
+  tune: LobbyTune | null;
+  /** 0 to 100. */
+  volume: number;
+}
+
+export const DEFAULT_LOBBY_VOLUME = 70;
+const MUSIC = "quizplayo.sound.lobby";
+
+/** Reads the saved choice. Anything unreadable gives the default (the game's own tune, volume 70). */
+export function parseLobbyMusic(raw: string | null | undefined): LobbyMusic {
+  const none: LobbyMusic = { tune: null, volume: DEFAULT_LOBBY_VOLUME };
+  if (!raw) return none;
+  try {
+    const v = JSON.parse(raw) as { tune?: unknown; volume?: unknown };
+    const tune = LOBBY_TUNES.some((t) => t.value === v.tune) ? (v.tune as LobbyTune) : null;
+    const volume = typeof v.volume === "number" && Number.isFinite(v.volume) ? Math.round(Math.min(100, Math.max(0, v.volume))) : DEFAULT_LOBBY_VOLUME;
+    return { tune, volume };
+  } catch {
+    return none;
+  }
+}
+
+/** The tune that plays: the host's choice, else the game's own family tune. */
+export function chosenTune(music: LobbyMusic, look: Band): LobbyTune {
+  return music.tune ?? look;
+}
+
+/** The volume control's 0 to 100 as a gain: squared, so equal steps sound about equally different. */
+export function lobbyLevel(volume: number): number {
+  const v = Math.min(100, Math.max(0, volume)) / 100;
+  return v * v;
+}
+
+/** Plays one pass of a lobby tune. False when the browser has not allowed sound yet (no tap or key press so far). */
+function playLobbyPass(tune: Band, volume: number): boolean {
+  if (!shared || shared.state !== "running") return false;
+  play(shared, tune, "lobby", lobbyLevel(volume));
+  return true;
 }
 
 /** How long one pass of the lobby tune lasts, so it can repeat while players join. */
@@ -134,4 +192,71 @@ export function useGameSound(band: Band) {
   }, [muted]);
 
   return { sound, buzz, muted, toggle };
+}
+
+/**
+ * The host's lobby music while {@code active}: the chosen tune repeats while players join, at the chosen volume, and the
+ * choice is kept on this device. A change plays at once, so the host hears it. {@code muted} (the sound switch) silences it.
+ * Nothing plays until the browser lets this page make sound, which happens at the first tap or key press.
+ */
+export function useLobbyMusic(look: Band, active: boolean, muted: boolean) {
+  const [music, setMusic] = useState<LobbyMusic>({ tune: null, volume: DEFAULT_LOBBY_VOLUME });
+  const volumeRef = useRef(music.volume);
+  volumeRef.current = music.volume;
+  const tune = chosenTune(music, look);
+
+  useEffect(() => {
+    try {
+      setMusic(parseLobbyMusic(window.localStorage.getItem(MUSIC)));
+    } catch {
+      // Storage blocked: the defaults apply.
+    }
+  }, []);
+
+  const save = useCallback((next: LobbyMusic) => {
+    setMusic(next);
+    try {
+      window.localStorage.setItem(MUSIC, JSON.stringify(next));
+    } catch {
+      // Storage blocked: the choice lasts until the page closes.
+    }
+  }, []);
+
+  // The loop: a pass now, then another each time one has finished.
+  useEffect(() => {
+    if (!active || muted || tune === "off") return;
+    let started = playLobbyPass(tune, volumeRef.current);
+    const id = setInterval(() => { started = playLobbyPass(tune, volumeRef.current) || started; }, lobbyLength(tune) + 1500);
+    // Before the first tap the browser stays silent: begin as soon as the host touches the page.
+    const begin = () => {
+      if (started) return;
+      setTimeout(() => { started = playLobbyPass(tune, volumeRef.current); }, 60);
+    };
+    window.addEventListener("pointerdown", begin);
+    window.addEventListener("keydown", begin);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener("pointerdown", begin);
+      window.removeEventListener("keydown", begin);
+    };
+  }, [active, muted, tune]);
+
+  // Moving the volume plays one pass shortly after the host stops, so they hear the new level.
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    if (!active || muted || tune === "off") return;
+    const id = setTimeout(() => playLobbyPass(tune, volumeRef.current), 350);
+    return () => clearTimeout(id);
+  }, [music.volume]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return {
+    tune,
+    volume: music.volume,
+    setTune: (value: LobbyTune) => save({ ...music, tune: value }),
+    setVolume: (value: number) => save({ ...music, volume: Math.round(Math.min(100, Math.max(0, value))) }),
+  };
 }

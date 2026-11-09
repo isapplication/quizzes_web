@@ -17,6 +17,8 @@ import { type GameSoundName, useGameSound } from "@/lib/gameSound";
 import { connectLive, LiveConnection, LiveMessage, LiveStatus } from "@/lib/live";
 import { OwnerBrandMark, useOwnerBrand } from "@/components/OwnerBrand";
 import type { ShownBrand } from "@/lib/me";
+import { CharacterAvatar } from "@/components/live/CharacterAvatar";
+import { isCharacter } from "@/lib/characters";
 
 interface Question {
   index: number;
@@ -123,7 +125,7 @@ type View = "connecting" | "lobby" | "intro" | "question" | "slide" | "answered"
  * A student's device in a live game. The question and options come from the server without the key;
  * after the question closes the server says whether the answer was right and how many points it earned.
  */
-export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade = null, compact = false, backUrl = null }: {
+export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade = null, compact = false, backUrl = null, character = null }: {
   url: string;
   pin: string;
   ticket: string;
@@ -136,8 +138,11 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
   compact?: boolean;
   /** For a student who came from their school's own system: their dashboard there, offered when the game ends. */
   backUrl?: string | null;
+  /** The player's built-in character (0 to 23) from the join page; the game server confirms it. Null for none. */
+  character?: number | null;
 }) {
   useOwnerBrand(brand);
+  const [myCharacter, setMyCharacter] = useState<number | null>(isCharacter(character) ? character : null);
   // The game server may add a number to a guest's nickname to keep names different ("Sam 2").
   const [shownName, setShownName] = useState(name);
   const [view, setView] = useState<View>("connecting");
@@ -192,6 +197,7 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
     switch (m.type) {
       case "joined":
         if (m.name) setShownName(String(m.name));
+        if (isCharacter(m.character)) setMyCharacter(m.character);
         setTitle(String(m.quizTitle ?? ""));
         setScore(Number(m.score ?? 0));
         setTeam(Number(m.team ?? 0));
@@ -381,7 +387,8 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
         {view === "connecting" && <div className="gl-center"><p className="gl-sub">Joining game {pin}…</p></div>}
         {view === "lobby" && (
           <div className="gl-center gl-in">
-            {lookGrade !== null && lookGrade <= 5 ? <Buddy grade={lookGrade} /> : <PlayerBadge name={shownName} size={96} />}
+            {myCharacter !== null ? <CharacterAvatar character={myCharacter} size={120} className="gl-char-big" />
+              : lookGrade !== null && lookGrade <= 5 ? <Buddy grade={lookGrade} /> : <PlayerBadge name={shownName} size={96} />}
             <div>
               <div className="gl-sub">You&apos;re in!</div>
               <div className="gl-big gl-name">{shownName}</div>
@@ -558,7 +565,8 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
         )}
         {view === "final" && final && (
           <div className="gl-center gl-in">
-            <Buddy grade={lookGrade} mood="happy" />
+            {myCharacter !== null ? <CharacterAvatar character={myCharacter} size={96} className="gl-char-big" />
+              : <Buddy grade={lookGrade} mood="happy" />}
             <div className="gl-sub">You finished</div>
             {final.ranked === false ? (
               <div className="gl-big">{final.correct} of {final.questions} right</div>

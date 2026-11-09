@@ -18,6 +18,8 @@ export interface AssignmentSummary {
   started: number;
   finished: number;
   createdAt: string;
+  /** Each student gets their own order of questions and answers (missing from an older server). */
+  shuffle?: boolean;
 }
 
 export interface AssignmentResults {
@@ -60,6 +62,8 @@ export interface MyAssignment {
   scored?: number | null;
   cards?: number | null;
   cardsKnown?: number | null;
+  /** Open, not finished, and due within 24 hours (missing from an older server). */
+  dueSoon?: boolean;
 }
 
 export interface PlayInfo {
@@ -168,6 +172,16 @@ export const typedAnswer = {
 };
 
 export const ACTIVITY_TYPES = ["PUZZLE", "MATCH", "CARD"];
+
+/**
+ * The notice on a student's home page for an assignment due within 24 hours: "Due today" when the due time falls on
+ * the viewer's own today, else "Due tomorrow". Null when it is not {@code dueSoon} (or has no due time).
+ */
+export function dueSoonText(a: { dueAt: string | null; dueSoon?: boolean; status?: string }, now: Date = new Date()): string | null {
+  if (!a.dueSoon || !a.dueAt || a.status === "DONE") return null;
+  const due = new Date(a.dueAt);
+  return due.toDateString() === now.toDateString() ? "Due today" : "Due tomorrow";
+}
 
 /** "Due Tue 4 Nov, 15:00" in the viewer's own time zone, or null. */
 export function dueText(dueAt: string | null): string | null {

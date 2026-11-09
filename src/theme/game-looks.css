@@ -536,3 +536,39 @@
 .gl-hide { justify-self: end; font-size: 13px; }
 .gl-moderate { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; justify-content: center; }
 @media (forced-colors: active) { .scale-point.is-chosen { border: 3px solid Highlight; } .gl-wall li { border: 1px solid CanvasText; } }
+/* ---------- Player characters and lobby music (wave 2, parts 2b) ---------- */
+/* Every character sits on a light tile, so its outline reads in every look, light or dark. Colours are theme variables. */
+.gl-char { display: block; flex: none; background: var(--g-white); border-radius: 24%; }
+.gl-char-big { filter: drop-shadow(0 6px 0 color-mix(in oklab, var(--sc) 15%, transparent)); }
+.gl-char-row { flex: none; }
+.gl-board .gl-char-row { width: 1.7em; height: 1.7em; }
+.gl-board .nm { display: flex; align-items: center; gap: 0.5em; }
+.gl-podium .gl-char-podium { width: clamp(64px, 9cqi, 180px); height: auto; }
+
+.gl-chars { border: 0; margin: 0; padding: 0; display: grid; gap: 8px; min-width: 0; }
+.gl-chars legend { padding: 0; margin-bottom: 4px; font-weight: 700; font-size: 15px; text-align: left; }
+.gl-chars .hint { font-weight: 400; font-size: 14px; opacity: 0.85; }
+.gl-char-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); gap: 8px; }
+.gl-char-opt { position: relative; display: grid; place-items: center; min-height: 56px; cursor: pointer; }
+/* The radio covers its tile, so a tap anywhere on it chooses it; the tile draws the state. */
+.gl-char-opt input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.gl-char-face { display: grid; place-items: center; width: 100%; aspect-ratio: 1; border-radius: calc(var(--tile-radius) * 0.6); background: var(--g-white); border: 2px solid var(--line); }
+.gl-char-face .gl-char { width: 80%; height: 80%; background: transparent; }
+@media (hover: hover) { .gl-char-opt:hover .gl-char-face { border-color: var(--pc); } }
+.gl-char-opt:has(input:checked) .gl-char-face { border-color: var(--pc); box-shadow: 0 0 0 3px var(--pc); }
+/* A tick as well as the ring, so the choice is never colour alone. */
+.gl-char-opt:has(input:checked)::after { content: "✓"; position: absolute; top: -4px; right: -4px; width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%; background: var(--pc); color: var(--g-white); font-size: 13px; font-weight: 800; line-height: 1; pointer-events: none; }
+.gl-char-opt:has(input:focus-visible) .gl-char-face { outline: 3px solid var(--g-ink); outline-offset: 3px; }
+.gl-char-status { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; min-height: 36px; font-size: 15px; }
+
+.gl-music { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: center; gap: 12px 24px; padding: 12px 16px; }
+.gl-music-field { display: grid; gap: 4px; font-weight: 700; font-size: 15px; text-align: left; min-width: min(100%, 220px); }
+.gl-music-field select { font: inherit; padding: 8px 10px; min-height: 44px; border-radius: 8px; border: 2px solid var(--line); background: var(--card); color: var(--ink); }
+.gl-music-field input[type="range"] { accent-color: var(--pc); width: 100%; min-height: 44px; margin: 0; cursor: pointer; }
+.gl-music-field input[type="range"]:focus-visible { outline: 3px solid var(--pc-ink); outline-offset: 3px; }
+.gl-music-field input[type="range"]:disabled { cursor: not-allowed; opacity: 0.5; }
+.gl-music-note { flex-basis: 100%; margin: 0; text-align: center; font-size: 14px; }
+@media (forced-colors: active) {
+  .gl-char-face { border: 2px solid CanvasText; }
+  .gl-char-opt:has(input:checked) .gl-char-face { outline: 3px solid Highlight; }
+}
