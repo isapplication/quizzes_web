@@ -14,6 +14,8 @@ import { JoinHero } from "@/components/live/GameBits";
 import { unlockGameSound } from "@/lib/gameSound";
 import { suggestNickname } from "@/lib/nicknames";
 import { PatternPad } from "@/components/live/JoinExtras";
+import { CharacterPicker } from "@/components/live/CharacterPicker";
+import { loadCharacter, storeCharacter } from "@/lib/characters";
 
 interface Joined {
   gameId: string;
@@ -25,6 +27,8 @@ interface Joined {
   brand: ShownBrand;
   guest: boolean;
   lookGrade: number | null;
+  /** The player's built-in character (0 to 23); null or missing for none. */
+  character?: number | null;
 }
 
 /** What the Quiz API says after the PIN: whose game it is and how this person can join it. */
@@ -87,6 +91,8 @@ function Play() {
   const [busy, setBusy] = useState(false);
   const [backUrl, setBackUrl] = useState<string | null>(null);
   const [pattern, setPattern] = useState<number[]>([]);
+  // The character this device picked last time, so a student need not pick again.
+  const [character, setCharacter] = useState<number | null>(null);
   const autoJoined = useRef(false);
   // The join page takes the hosting school's colours as soon as the PIN is known.
   useOwnerBrand(info?.brand);
@@ -113,6 +119,11 @@ function Play() {
     }
   }
 
+  function pickCharacter(n: number | null) {
+    setCharacter(n);
+    storeCharacter(n);
+  }
+
   async function join() {
     if (!info) return;
     // The join tap is the gesture that lets the game play sound on this phone.
@@ -121,7 +132,7 @@ function Play() {
     setError(null);
     try {
       const j = await api<Joined>("/api/v1/live/join", {
-        method: "POST", body: { pin: info.pin, nickname, pattern: info.roomCheck ? pattern : null },
+        method: "POST", body: { pin: info.pin, nickname, pattern: info.roomCheck ? pattern : null, character },
       });
       save(j);
       setJoined(j);
@@ -135,6 +146,7 @@ function Play() {
   }
 
   useEffect(() => {
+    setCharacter(loadCharacter());
     const p = params.get("pin");
     if (p) lookUp(p);
     // Someone who came from their school's own system goes back to their dashboard there at the end.
@@ -151,7 +163,7 @@ function Play() {
 
   if (joined) {
     return <PlayerGame url={joined.cometdUrl} pin={joined.pin} ticket={joined.ticket} name={joined.name}
-                       quizTitle={joined.quizTitle} brand={joined.brand} lookGrade={joined.lookGrade}
+                       quizTitle={joined.quizTitle} brand={joined.brand} lookGrade={joined.lookGrade} character={joined.character ?? null}
                        backUrl={joined.guest ? null : backUrl} />;
   }
 
@@ -184,6 +196,7 @@ function Play() {
               {info.joinAs === "SIGNED_IN" && (
                 <div className="gl-card gl-join-card gl-form">
                   <p style={{ margin: 0 }}>You&apos;re playing as <strong>{info.name}</strong>: your result is saved.</p>
+                  <CharacterPicker value={character} onChange={pickCharacter} />
                   <button className="gl-btn gl-btn-big" type="button" disabled={busy} onClick={join}>
                     {busy ? "Joining…" : "Join the game"}
                   </button>
@@ -209,6 +222,7 @@ function Play() {
                       Suggest a name
                     </button>
                   </div>
+                  <CharacterPicker value={character} onChange={pickCharacter} />
                   {info.roomCheck && <PatternPad value={pattern} onChange={(update) => { setPattern(update); setError(null); }} />}
                   <button className="gl-btn gl-btn-big" type="submit"
                           disabled={busy || nickname.trim().length < 2 || (!!info.roomCheck && pattern.length < 4)}>

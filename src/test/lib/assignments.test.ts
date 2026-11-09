@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { rightText } from "../../lib/assignments";
+import { dueSoonText, rightText } from "../../lib/assignments";
 
 describe("rightText: how an attempt went, in words", () => {
   it("counts only scored questions as right", () => {
@@ -17,5 +17,25 @@ describe("rightText: how an attempt went, in words", () => {
 
   it("reads an older server's answer, which has no scored count", () => {
     expect(rightText({ correct: 3, questions: 4 })).toBe("3 of 4 right");
+  });
+});
+
+describe("dueSoonText: the notice on a student's home page", () => {
+  const now = new Date(2026, 10, 9, 10, 0, 0);
+  const at = (hours: number) => new Date(now.getTime() + hours * 3_600_000).toISOString();
+
+  it("says nothing unless the server says it is due soon", () => {
+    expect(dueSoonText({ dueAt: at(30), dueSoon: false, status: "NOT_STARTED" }, now)).toBeNull();
+    expect(dueSoonText({ dueAt: at(2), status: "NOT_STARTED" }, now)).toBeNull();
+    expect(dueSoonText({ dueAt: null, dueSoon: true, status: "NOT_STARTED" }, now)).toBeNull();
+  });
+
+  it("says Due today when the due time falls on today, else Due tomorrow", () => {
+    expect(dueSoonText({ dueAt: at(2), dueSoon: true, status: "NOT_STARTED" }, now)).toBe("Due today");
+    expect(dueSoonText({ dueAt: at(23), dueSoon: true, status: "IN_PROGRESS" }, now)).toBe("Due tomorrow");
+  });
+
+  it("says nothing once the assignment is done", () => {
+    expect(dueSoonText({ dueAt: at(2), dueSoon: true, status: "DONE" }, now)).toBeNull();
   });
 });

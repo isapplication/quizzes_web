@@ -10,7 +10,7 @@ import { TemplateSelector } from "@/components/TemplateSelector";
 import { normalizePin } from "@/lib/pin";
 import { api, ApiError } from "@/lib/api";
 import { gradeLabel, QuizSummary } from "@/lib/content";
-import { AssignmentSummary, dueText, MyAssignment, rightText } from "@/lib/assignments";
+import { AssignmentSummary, dueSoonText, dueText, MyAssignment, rightText } from "@/lib/assignments";
 import { isIndependent, isSchoolAdmin, isStaff, useMe } from "@/lib/me";
 import { GRADES } from "@/lib/school";
 import { EmptyState, LoadingState, PageHeader } from "@/components/ui/States";
@@ -489,6 +489,7 @@ function TeacherAssignments() {
             <strong>{a.title}</strong>
             <div className="muted" style={{ fontSize: 14 }}>
               {a.classCode ? "Class " + a.classCode : "Anyone with the link"}{a.dueAt && <> · {dueText(a.dueAt)}</>}
+              {a.shuffle && <> · Shuffled</>}
               {" · "}{a.finished} of {a.started} finished
             </div>
           </div>
@@ -527,7 +528,10 @@ function MyAssignments() {
             </div>
             {a.status === "DONE" ? <span className="chip chip-ok">Done</span>
               : !a.open ? <span className="chip">Closed</span>
-              : <Link className="btn btn-primary" href={"/a/" + a.code}>{a.status === "IN_PROGRESS" ? "Carry on" : "Start"}<span className="sr-only"> {a.title}</span></Link>}
+              : <span className="row" style={{ gap: 8 }}>
+                  {dueSoonText(a) && <span className="chip chip-warn">{dueSoonText(a)}</span>}
+                  <Link className="btn btn-primary" href={"/a/" + a.code}>{a.status === "IN_PROGRESS" ? "Carry on" : "Start"}<span className="sr-only"> {a.title}</span></Link>
+                </span>}
           </li>
         ))}
       </ul>

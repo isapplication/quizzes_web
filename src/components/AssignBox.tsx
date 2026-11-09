@@ -17,6 +17,7 @@ export function AssignBox({ target }: { target: HostTarget }) {
   const [classCode, setClassCode] = useState("");
   const [signedInOnly, setSignedInOnly] = useState(false);
   const [due, setDue] = useState("");
+  const [shuffle, setShuffle] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [made, setMade] = useState<AssignmentSummary | null>(null);
@@ -32,7 +33,7 @@ export function AssignBox({ target }: { target: HostTarget }) {
         body: {
           ...target, classCode: classCode || null, requireSignIn: school && signedInOnly,
           // The picker gives local time; the API wants an instant.
-          dueAt: due ? new Date(due).toISOString() : null,
+          dueAt: due ? new Date(due).toISOString() : null, shuffle,
         },
       }));
     } catch (err) {
@@ -58,6 +59,7 @@ export function AssignBox({ target }: { target: HostTarget }) {
         <p style={{ margin: 0 }}>
           Students open this link and do it at their own pace{made.classCode && <> (class {made.classCode} also sees it on their home page)</>}.
           {made.dueAt && <> {dueText(made.dueAt)}.</>}
+          {made.shuffle && <> Each student gets their own order of questions and answers.</>}
         </p>
         <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
           <input type="text" readOnly value={made.link} aria-label="Assignment link" style={{ flex: "1 1 260px", minWidth: 0 }}
@@ -99,6 +101,10 @@ export function AssignBox({ target }: { target: HostTarget }) {
           <span>Only signed-in students of {me.school.name} <span className="muted">(results saved to each student)</span></span>
         </label>
       )}
+      <label className="check">
+        <input type="checkbox" checked={shuffle} onChange={(e) => setShuffle(e.target.checked)} />
+        <span>Shuffle questions and answers <span className="muted">(each student gets their own order, so copying is harder)</span></span>
+      </label>
       {error && <div className="alert alert-danger" role="alert">{error}</div>}
       <div className="row">
         <button type="submit" className="btn btn-secondary" disabled={busy}>{busy ? "Assigning…" : "Assign"}</button>

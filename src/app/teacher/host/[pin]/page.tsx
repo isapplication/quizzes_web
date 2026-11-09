@@ -8,11 +8,14 @@ import { GameLook } from "@/components/live/GameLook";
 import { Buddy, Confetti } from "@/components/live/LookArt";
 import { LastSecondsTicks, PlayerBadge, SoundToggle } from "@/components/live/GameBits";
 import { lookBand, lookWords, type Band } from "@/lib/gameLook";
-import { lobbyLength, useGameSound } from "@/lib/gameSound";
+import { useGameSound, useLobbyMusic } from "@/lib/gameSound";
+import { CharacterAvatar } from "@/components/live/CharacterAvatar";
+import { LobbyMusic } from "@/components/live/LobbyMusic";
 import { api } from "@/lib/api";
 import { connectLive, LiveConnection, LiveMessage, LiveStatus } from "@/lib/live";
 import { MeProvider, ownBrand, ShownBrand, useMe } from "@/lib/me";
 import { formatPin } from "@/lib/pin";
+import { isCharacter } from "@/lib/characters";
 import { OwnerBrandMark, useOwnerBrand } from "@/components/OwnerBrand";
 import { JoinQr, RoomPatternCard } from "@/components/live/JoinExtras";
 import { HostOpenAnswers, HostResults, HostSlide, type HostClosed, type HostQuestion } from "@/components/live/HostQuestion";
@@ -42,6 +45,8 @@ interface Player {
   team: number;
   /** Joined with the PIN and a nickname, not signed in. */
   guest?: boolean;
+  /** The player's built-in character (0 to 23); missing for none. */
+  character?: number;
 }
 
 interface TeamStanding {
@@ -56,6 +61,8 @@ interface Ranked {
   id: string;
   name: string;
   score: number;
+  /** The player's built-in character (0 to 23); missing for none. */
+  character?: number;
 }
 
 interface Question extends HostQuestion {
@@ -112,6 +119,7 @@ function HostScreen() {
   const band = lookBand(look);
   const words = lookWords(band);
   const { sound, muted, toggle } = useGameSound(band);
+  const lobbyMusic = useLobbyMusic(band, view === "lobby" && !!game, muted);
   const live = useRef<LiveConnection | null>(null);
   const serverNow = useCallback(() => live.current?.serverNow() ?? Date.now(), []);
 
@@ -213,13 +221,7 @@ function HostScreen() {
     live.current?.send({ type, ...extra });
   };
 
-  // The family's sounds: a lobby tune while players join, the reveal, and a fanfare for the podium.
-  useEffect(() => {
-    if (view !== "lobby" || !game) return;
-    sound("lobby");
-    const id = setInterval(() => sound("lobby"), lobbyLength(band) + 1500);
-    return () => clearInterval(id);
-  }, [view, game, band, sound]);
+  // The family's sounds: the reveal, and a fanfare for the podium. The lobby music is useLobbyMusic's.
   useEffect(() => {
     if (view === "results") sound("reveal");
     if (view === "podium") sound("fanfare");
@@ -282,6 +284,8 @@ function HostScreen() {
                 ))}
               </div>
             )}
+            <LobbyMusic tune={lobbyMusic.tune} volume={lobbyMusic.volume} muted={muted}
+                        onTune={lobbyMusic.setTune} onVolume={lobbyMusic.setVolume} />
             <div className="gl-row">
               <span className="gl-pill">{playerCount} {playerCount === 1 ? "player" : "players"}</span>
               <span className="gl-spacer" />
@@ -292,7 +296,7 @@ function HostScreen() {
             <ul className="gl-chips gl-in" aria-label="Players">
               {players.map((p, i) => (
                 <li key={p.id} className={"gl-chip" + (p.connected ? "" : " away")} style={{ "--i": Math.min(i, 20) } as CSSProperties}>
-                  <PlayerBadge name={p.name} size={26} />
+                  {isCharacter(p.character) ? <CharacterAvatar character={p.character} size={30} /> : <PlayerBadge name={p.name} size={26} />}
                   {p.team > 0 && <TeamBadge team={p.team} />}
                   {p.name}
                   {p.guest && <span className="gl-guest">Guest</span>}
@@ -403,7 +407,7 @@ function Board({ rows }: { rows: Ranked[] }) {
       {rows.map((r, i) => (
         <li key={r.id} style={{ "--i": Math.min(i, 10) } as CSSProperties}>
           <span className="rk gl-on">{r.rank}</span>
-          <span className="nm">{r.name}</span>
+          <span className="nm">{isCharacter(r.character) && <CharacterAvatar character={r.character} size={36} className="gl-char-row" />}{r.name}</span>
           <span className="sc">{r.score.toLocaleString()}</span>
         </li>
       ))}
@@ -418,7 +422,8 @@ function Podium({ top, grade, band }: { top: Ranked[]; grade: number | null; ban
     <div className="gl-podium gl-in">
       {[1, 0, 2].map((i) => top[i] && (
         <div key={top[i].id} className={"col p" + (i + 1)} style={{ "--i": [1, 0, 2][i] } as CSSProperties}>
-          {i === 0 && band === "k2" && <Buddy grade={grade} mood="happy" />}
+          {isCharacter(top[i].character) ? <CharacterAvatar character={top[i].character} size={96} className="gl-char-podium" />
+            : i === 0 && band === "k2" && <Buddy grade={grade} mood="happy" />}
           <div className="who">{top[i].name}</div>
           <div className="pts">{top[i].score.toLocaleString()} points</div>
           <div className="block gl-on-large" aria-label={places[i] + " place"}>{top[i].rank}</div>
