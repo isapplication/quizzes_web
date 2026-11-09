@@ -161,6 +161,8 @@ export interface EditorQuestion {
   correctIndexes: number[];
   payload: EditorPayload;
   explanation: string | null;
+  /** The standard code the question covers (W63), in capitals; empty when none. */
+  standard?: string | null;
   /** Read only: what the server sent before 1b; never relied on after {@link fromServer}. */
   correctIndex?: number;
   /** The question's (or slide's) picture, with its description (part 2f). */
@@ -311,6 +313,7 @@ export function fromServer(raw: Record<string, unknown>): EditorQuestion {
     image,
     choiceImages: CHOICE_TYPES.includes(type) && pictures.some(Boolean)
       ? choices.map((_, i) => pictures[i] ?? null) : [],
+    standard: typeof raw.standard === "string" && raw.standard ? raw.standard : null,
   };
 }
 
@@ -320,7 +323,8 @@ export function fromServer(raw: Record<string, unknown>): EditorQuestion {
  */
 export function changeType(q: EditorQuestion, type: QType): EditorQuestion {
   if (q.type === type) return q;
-  const next: EditorQuestion = { ...blank(type), text: q.text, explanation: q.explanation, points: q.points, image: q.image ?? null };
+  const next: EditorQuestion = { ...blank(type), text: q.text, explanation: q.explanation, points: q.points, image: q.image ?? null,
+    standard: q.standard ?? null };
   if (CHOICE_TYPES.includes(q.type) && CHOICE_TYPES.includes(type)) {
     next.choices = [...q.choices];
     next.choiceImages = [...(q.choiceImages ?? [])];
@@ -439,6 +443,7 @@ export function toServer(q: EditorQuestion) {
     explanation: q.explanation,
     image: described(q.image) ? { mediaId: q.image!.mediaId, alt: q.image!.alt.trim() } : null,
     choiceImages,
+    standard: standardCode(q.standard),
   };
 }
 
@@ -736,4 +741,19 @@ export function revealStep(openedAt: number, closesAt: number, now: number): num
   if (!(closesAt > openedAt)) return 5;
   const share = (now - openedAt) / (closesAt - openedAt);
   return Math.max(1, Math.min(5, Math.floor(share * 5) + 1));
+}
+
+/** The longest standard code the API takes (W63). */
+export const STANDARD_MAX = 30;
+
+/** A standard code as it is sent: trimmed, in capitals, null when empty. The API refuses anything but letters, digits, dots and dashes. */
+export function standardCode(raw: string | null | undefined): string | null {
+  const code = (raw ?? "").trim().toUpperCase();
+  return code === "" ? null : code;
+}
+
+/** True when a code is empty or 2 to 30 letters, digits, dots and dashes (what the API accepts). */
+export function standardOk(raw: string | null | undefined): boolean {
+  const code = standardCode(raw);
+  return code === null || /^[A-Z0-9][A-Z0-9.-]{1,29}$/.test(code);
 }

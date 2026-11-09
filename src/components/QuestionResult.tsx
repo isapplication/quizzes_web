@@ -3,11 +3,12 @@ import { type AnswerKey, formatNumber, keyText, percent, QTYPE_LABEL, type QType
 
 /**
  * One question's results, as a live game's report and an assignment's results both send them (API
- * {@code GameReports.QuestionRow} and {@code Assignments.QuestionRow}): every correct choice, whether it is scored (a
- * poll isn't), its answer key and per-type stats.
+ * {@code QuestionStats.Row}): every correct choice, whether it is scored (a poll isn't), its answer key and per-type
+ * stats, and {@code questionId} (the question's own id).
  */
 export interface ReportQuestion {
   number: number;
+  questionId?: string | null;
   text: string;
   type: string | null;
   choices: string[];

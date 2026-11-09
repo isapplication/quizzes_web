@@ -77,12 +77,14 @@ function TopBar() {
             <Link href="/home">My quizzes</Link>
             <Link href="/library">Library</Link>
             <Link href="/teacher/studio">AI Studio</Link>
+            <Link href="/teacher/reports">Reports</Link>
           </>
         ) : (
           !me.platformTeam && <Link href="/play">Join a game</Link>
         )}
         {isSchoolAdmin(me) && school && <Link href="/admin/setup">Get started</Link>}
         {isSchoolAdmin(me) && school && <Link href="/admin/people">People</Link>}
+        {isSchoolAdmin(me) && <Link href="/admin/reports">School reports</Link>}
         {isSchoolAdmin(me) && <Link href="/admin/ai-use">AI use</Link>}
         {isSchoolAdmin(me) && <Link href="/admin/brand">Brand settings</Link>}
         {me.platformTeam && <Link href="/platform">Platform console</Link>}

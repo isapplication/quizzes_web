@@ -5,6 +5,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { AppFrame } from "@/components/AppFrame";
 import { JoinSuggestion, LinkAccountOffer } from "@/components/MembershipBanners";
+import { StandardFilter } from "@/components/StandardFilter";
+import { Trend } from "@/components/Trend";
+import type { StudentReport } from "@/lib/reports";
 import { StarterShelf } from "@/components/StarterShelf";
 import { TemplateSelector } from "@/components/TemplateSelector";
 import { normalizePin } from "@/lib/pin";
@@ -239,13 +242,14 @@ function MyQuizzes() {
   const [quizzes, setQuizzes] = useState<QuizSummary[] | null>(null);
   const [query, setQuery] = useState("");
   const [grade, setGrade] = useState<string>("");
+  const [standard, setStandard] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
   const load = useCallback(() => {
-    api<QuizSummary[]>("/api/v1/content/quizzes/mine").then(setQuizzes)
+    api<QuizSummary[]>("/api/v1/content/quizzes/mine" + (standard ? "?standard=" + encodeURIComponent(standard) : "")).then(setQuizzes)
       .catch((e: unknown) => setError(e instanceof ApiError ? e.message : "Quizplayo could not load your quizzes."));
-  }, []);
+  }, [standard]);
   useEffect(load, [load]);
 
   const shown = useMemo(() => (quizzes ?? []).filter((q) =>
@@ -276,7 +280,7 @@ function MyQuizzes() {
   }
 
   if (!quizzes) return error ? <div className="alert alert-danger">{error}</div> : <LoadingState rows={4} label="Loading your quizzes" />;
-  if (quizzes.length === 0) {
+  if (quizzes.length === 0 && !standard) {
     return (
       <EmptyState title="No quizzes yet" action={
         <div className="row" style={{ gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
@@ -301,6 +305,7 @@ function MyQuizzes() {
           <option value="">All grades</option>
           {grades.map((g) => <option key={g} value={g}>{gradeLabel(g)}</option>)}
         </select>
+        <StandardFilter id="my-standard" value={standard} onCommit={setStandard} />
       </div>
       {shown.length === 0 && <p className="muted">No quiz matches. Try another word or grade.</p>}
       <div className="quiz-grid">
@@ -580,6 +585,8 @@ function StudentHome() {
 
       <MyAssignments />
 
+      <MyProgress />
+
       <section className="stack">
         <h2>My results</h2>
         {!results && <LoadingState rows={2} label="Loading your results" />}
@@ -603,6 +610,51 @@ function StudentHome() {
         )}
       </section>
     </div>
+  );
+}
+
+/**
+ * "My progress" (wave3-plan.md, 3b): a signed-in student's own accuracy over the last 90 days and how their recent games
+ * and assignments went. Only the student's own: nothing about classmates.
+ */
+function MyProgress() {
+  const [report, setReport] = useState<StudentReport | null | undefined>(undefined);
+
+  useEffect(() => {
+    api<StudentReport>("/api/v1/reports/me").then(setReport).catch(() => setReport(null));
+  }, []);
+
+  if (report === undefined) return <LoadingState rows={2} label="Loading your progress" />;
+  if (report === null || report.sessions === 0) return null;
+  return (
+    <section className="stack" aria-labelledby="my-progress">
+      <h2 id="my-progress">My progress</h2>
+      <div className="card progress-card">
+        <div>
+          <span className="muted">Right, last 90 days</span>
+          <strong className="progress-number">{report.percent}%</strong>
+        </div>
+        <div>
+          <span className="muted">Last 5 games and assignments</span>
+          <strong className="progress-number">{report.recentPercent}%</strong>
+        </div>
+        <div>
+          <span className="muted">Over time</span>
+          <Trend values={report.trend} label="Your accuracy" width={140} height={40} />
+        </div>
+      </div>
+      <ul className="result-list">
+        {report.timeline.slice(0, 5).map((s, i) => (
+          <li key={i} className="card">
+            <div>
+              <strong>{s.title}</strong>
+              <div className="muted">{s.source === "GAME" ? "Game" : "Assignment"} · {new Date(s.at).toLocaleDateString()}</div>
+            </div>
+            <div className="result-numbers"><span>{s.percent}% right</span></div>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

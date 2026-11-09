@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { AppFrame } from "@/components/AppFrame";
 import { LibraryQuizCard } from "@/components/LibraryCards";
+import { StandardFilter } from "@/components/StandardFilter";
 import { api, ApiError } from "@/lib/api";
 import { gradeLabel, SUBJECTS } from "@/lib/content";
 import { LibraryCard, LibraryCourse, LibraryPage } from "@/lib/library";
@@ -33,6 +34,7 @@ function Library() {
   const course = params.get("course") ?? "";
   const q = params.get("q") ?? "";
   const kind = params.get("kind") ?? "";
+  const standard = params.get("standard") ?? "";
   const [search, setSearch] = useState(q);
   const [courses, setCourses] = useState<LibraryCourse[]>([]);
   const [quizzes, setQuizzes] = useState<LibraryCard[] | null>(null);
@@ -42,7 +44,7 @@ function Library() {
   const [error, setError] = useState<string | null>(null);
 
   function set(next: Record<string, string>) {
-    const all = new URLSearchParams({ grade, subject, course, q, kind, ...next });
+    const all = new URLSearchParams({ grade, subject, course, q, kind, standard, ...next });
     [...all.keys()].forEach((k) => { if (!all.get(k) && k !== "grade") all.delete(k); });
     router.replace("/library?" + all.toString(), { scroll: false });
   }
@@ -62,7 +64,7 @@ function Library() {
       setMore(r.more);
     }).catch((e: unknown) => setError(e instanceof ApiError ? e.message : "Quizplayo could not load the library."));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [grade, subject, course, q, kind]);
+  }, [grade, subject, course, q, kind, standard]);
 
   function query(p: number): string {
     const u = new URLSearchParams();
@@ -71,6 +73,7 @@ function Library() {
     if (course) u.set("course", course);
     if (q) u.set("q", q);
     if (kind) u.set("kind", kind);
+    if (standard) u.set("standard", standard);
     u.set("page", String(p));
     return u.toString();
   }
@@ -126,6 +129,7 @@ function Library() {
             </select>
           </div>
         )}
+        <StandardFilter id="lib-standard" value={standard} grade={grade === "" ? null : Number(grade)} onCommit={(code) => set({ standard: code })} />
         <div className="field library-search">
           <label htmlFor="lib-q">Search</label>
           <div className="row" style={{ gap: 8 }}>

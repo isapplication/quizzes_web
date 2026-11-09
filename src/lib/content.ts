@@ -39,6 +39,8 @@ export interface QuestionView {
   /** Wave 2f: the question's picture and each answer's picture, with signed addresses. */
   image?: { mediaId: string; alt: string; url?: string | null; width?: number | null; height?: number | null } | null;
   choiceImages?: ({ mediaId: string; alt: string; url?: string | null; width?: number | null; height?: number | null } | null)[] | null;
+  /** The standard code the question covers, or null. */
+  standard?: string | null;
 }
 
 export interface QuizView {

@@ -3,6 +3,7 @@
 import { useId, useState } from "react";
 import { AnswerShape, shapeName, shapeNumber } from "@/components/AnswerShape";
 import { PictureField } from "@/components/PictureField";
+import { StandardField } from "@/components/StandardField";
 import { POINTS, TIMES } from "@/lib/content";
 import { AreaEditor } from "@/components/ImageQuestion";
 import { clock, type MediaRef, parseTime, type SlideVideo } from "@/lib/media";
@@ -15,11 +16,14 @@ import {
  * answers with one or several marked right, accepted texts, the slider's scale, the puzzle's items in the right order,
  * or a slide's title and text. The checks that stop publishing are in lib/questionTypes.ts {@code missing}.
  */
-export function QuestionForm({ index, q, total, problem, onChange, onType, onMove, onCopy, onRemove }: {
+export function QuestionForm({ index, q, total, problem, grade, subject, onChange, onType, onMove, onCopy, onRemove }: {
   index: number;
   q: EditorQuestion;
   total: number;
   problem: string | null;
+  /** The quiz's grade and subject, for the standard suggestions. */
+  grade: number;
+  subject: string;
   onChange: (patch: Partial<EditorQuestion>) => void;
   onType: (type: QType) => void;
   onMove: (by: number) => void;
@@ -137,6 +141,7 @@ export function QuestionForm({ index, q, total, problem, onChange, onType, onMov
         </div>
       )}
       {slide && <p className="hint" style={{ margin: 0 }}>A slide has no timer and no points: in a live game you click Next when the class has read it.</p>}
+      {!slide && <StandardField value={q.standard} grade={grade} subject={subject} onChange={(standard) => onChange({ standard })} />}
       {!slide && (
         <div className="field">
           <label htmlFor={id + "-explain"}>Explanation (optional)</label>
