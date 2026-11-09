@@ -4,11 +4,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { GameTile, GameTimer, ordinal, TeamBadge, useCountdown } from "./Stage";
 import { AnswerShape, shapeNumber } from "./AnswerShape";
 import { OrderList } from "./ActivityRound";
-import { CategoriseForm, type CategoriseShown, MultiSelectForm, type SliderShown, SliderForm, TypeAnswerForm } from "./AnswerInputs";
+import { CategoriseForm, type CategoriseShown, FreeTextForm, IdeasForm, MultiSelectForm, ScaleForm, type ScaleShown, type SliderShown,
+  SliderForm, TypeAnswerForm, VotesForm } from "./AnswerInputs";
 import { type AnswerKey, formatNumber, keyText, outcomeOf, type Pick, pickOf } from "@/lib/questionTypes";
 import { GameLook } from "@/components/live/GameLook";
+import { PinForm, QuestionImageView } from "@/components/ImageQuestion";
+import type { QuestionImage } from "@/lib/questionTypes";
 import { Buddy, Confetti } from "@/components/live/LookArt";
-import { LastSecondsTicks, PlayerBadge, SoundToggle } from "@/components/live/GameBits";
+import { LastSecondsTicks, PlayerBadge, SoundToggle, TalkCountdown } from "@/components/live/GameBits";
 import { lookBand, lookWords } from "@/lib/gameLook";
 import { type GameSoundName, useGameSound } from "@/lib/gameSound";
 import { connectLive, LiveConnection, LiveMessage, LiveStatus } from "@/lib/live";
@@ -34,6 +37,28 @@ interface Question {
   categorise?: CategoriseShown;
   /** SLIDE: its title (the text is the body). */
   title?: string;
+  /** Confidence (Wave 2c): the boosts this question takes (50, 75, 100); missing when it takes none. */
+  boosts?: number[];
+  /** Team talk (Wave 2d): answers open (and the timer starts) at this server time. */
+  talkEndsAt?: number;
+  /** SCALE (Wave 2e): its ends and labels. */
+  scale?: ScaleShown;
+  /** WORD_CLOUD, OPEN_ENDED: the longest answer in characters. */
+  maxLength?: number;
+  /** Wave 2h: the question's image, and whether it uncovers in steps (quiz, type answer). */
+  image?: QuestionImage;
+  reveal?: boolean;
+  /** Wave 2i: a brainstorm's limits. */
+  brainstorm?: { maxIdeas: number; maxLength: number; maxVotes: number };
+}
+
+/** A brainstorm's votes round, as the server sends it to this player (their own ideas marked). */
+interface VoteRound {
+  index: number;
+  ideas: { id: string; text: string; mine: boolean }[];
+  maxVotes: number;
+  closesAt: number;
+  voted?: boolean;
 }
 
 /** How this question is answered, read from {@code pick}, else from its type. */
@@ -49,14 +74,18 @@ interface Result {
   score: number;
   rank: number;
   players: number;
-  /** Team games: the player's team, its place and its average score. */
+  /** Team games: the player's team, its name, its place and its average score. */
   team?: number;
+  teamName?: string;
   teamRank?: number;
   teamScore?: number;
   teams?: number;
   /** Wave 1b: the judged share from 0 to 1 (partial points), and false for a poll, which is never right or wrong. */
   fraction?: number;
   counted?: boolean;
+  /** Wave 2c: the Confidence boost won (positive) or lost (negative); false for a Lecture, which has no ranks. */
+  boost?: number;
+  ranked?: boolean;
 }
 
 /** The key of the question that just closed (Wave 1b "closed" message). */
@@ -81,8 +110,11 @@ interface Final {
   questions: number;
   top: { rank: number; name: string; score: number }[];
   team?: number;
+  teamName?: string;
   teamRank?: number;
   teams?: number;
+  /** False for a Lecture: no ranks and no points. */
+  ranked?: boolean;
 }
 
 type View = "connecting" | "lobby" | "intro" | "question" | "slide" | "answered" | "result" | "final" | "out";
@@ -114,6 +146,9 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
   const [title, setTitle] = useState(quizTitle ?? "");
   const [score, setScore] = useState(0);
   const [team, setTeam] = useState(0);
+  const [teamName, setTeamName] = useState<string | null>(null);
+  // Team talk: true until answers open on this question (the server refuses answers before then anyway).
+  const [talking, setTalking] = useState(false);
   const [intro, setIntro] = useState<{ index: number; total: number; startsAt: number } | null>(null);
   const [question, setQuestion] = useState<Question | null>(null);
   const [sent, setSent] = useState<Sent | null>(null);
@@ -121,8 +156,18 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
   const [final, setFinal] = useState<Final | null>(null);
   // The right answer of the question that just closed, so a wrong answer can show it.
   const [closedKey, setClosedKey] = useState<ClosedKey | null>(null);
+  // Confidence: the answer is in and the boost not chosen yet (null: no choice to make); the boost once chosen.
+  const [boostPending, setBoostPending] = useState(false);
+  const [boost, setBoost] = useState<number | null>(null);
+  // A Lecture has no points or ranks.
+  const [ranked, setRanked] = useState(true);
+  // Free text the server refused (a rude word, too long): its reason and what was sent, to change and send again.
+  const [refused, setRefused] = useState<{ message: string; text: string } | null>(null);
+  const [votes, setVotes] = useState<VoteRound | null>(null);
   // The question on screen, for the message handler (a slide's closing sends no result to show).
   const shownQuestion = useRef<Question | null>(null);
+  // The text of the last free-text answer sent, for the message handler.
+  const sentText = useRef("");
   const band = lookBand(lookGrade);
   const words = lookWords(band);
   const { sound: playSound, buzz, muted, toggle } = useGameSound(band);
@@ -137,6 +182,11 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
       setQuestion(q);
       shownQuestion.current = q;
       setSent(null);
+      setBoostPending(false);
+      setBoost(null);
+      setRefused(null);
+      setVotes(null);
+      setTalking(!!q.talkEndsAt && q.talkEndsAt > (live.current?.serverNow() ?? Date.now()));
       setView(pickFor(q) === "none" ? "slide" : "question");
     };
     switch (m.type) {
@@ -145,15 +195,30 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
         setTitle(String(m.quizTitle ?? ""));
         setScore(Number(m.score ?? 0));
         setTeam(Number(m.team ?? 0));
-        if (m.question && !m.answered) {
+        setTeamName((m.teamName as string) ?? null);
+        setRanked(m.ranked !== false);
+        if (m.votes && !(m.votes as VoteRound).voted) {
+          // Rejoined during a brainstorm's votes round.
+          setQuestion(m.question as unknown as Question);
+          shownQuestion.current = m.question as unknown as Question;
+          setVotes(m.votes as unknown as VoteRound);
+          setSent(null);
+          setView("question");
+        } else if (m.question && !m.answered) {
           opened(m.question as unknown as Question);
         } else if (m.question && m.answered) {
           setQuestion(m.question as unknown as Question);
           shownQuestion.current = m.question as unknown as Question;
+          setBoostPending(m.boostPending === true);
           setView("answered");
         } else {
           setView(m.phase === "PODIUM" ? "final" : "lobby");
         }
+        break;
+      case "team":
+        // The teacher moved this player to another team in the lobby.
+        setTeam(Number(m.team ?? 0));
+        setTeamName((m.teamName as string) ?? null);
         break;
       case "intro":
         setIntro({ index: Number(m.index), total: Number(m.total), startsAt: Number(m.startsAt) });
@@ -174,7 +239,32 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
         break;
       }
       case "answerAck":
+        if (m.accepted === false && m.rejected === true) {
+          // Back to the question with the reason, so the player can change the answer (W10, W11).
+          setRefused({ message: String(m.message ?? "Try a different answer."), text: sentText.current });
+          setSent(null);
+          setView("question");
+          break;
+        }
         if (m.accepted === false && m.message) setMessage(String(m.message));
+        if (m.accepted === true) setBoostPending(m.boostPending === true);
+        break;
+      case "votes":
+        // A brainstorm's votes round has started.
+        setVotes(m as unknown as VoteRound);
+        setQuestion((q) => (q ? { ...q, closesAt: Number(m.closesAt), openedAt: q.closesAt } : q));
+        setSent(null);
+        setMessage(null);
+        setView("question");
+        break;
+      case "boostAck":
+        if (m.accepted === true) {
+          setBoost(Number(m.boost));
+          setBoostPending(false);
+        } else if (m.message) {
+          setMessage(String(m.message));
+          setBoostPending(false);
+        }
         break;
       case "result": {
         setScore(Number(m.score));
@@ -247,8 +337,18 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
     sound("tap");
     setSent(shown);
     setMessage(null);
+    sentText.current = shown.text;
     live.current?.send({ type: "answer", index: question.index, ...given });
     setView("answered");
+  }
+
+  /** Confidence: sends this player's boost (0 is "No boost") for the question they just answered. */
+  function chooseBoost(value: number) {
+    if (!question || !boostPending) return;
+    sound("tap");
+    setBoostPending(false);
+    setBoost(value);
+    live.current?.send({ type: "boost", index: question.index, boost: value });
   }
 
   const pick = question ? pickFor(question) : "one";
@@ -264,8 +364,8 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
         {compact ? <span className="brand">{shownName}</span> : <OwnerBrandMark brand={brand} />}
         <span className="gl-spacer" />
         {!compact && <span className="gl-who">{shownName}</span>}
-        {team > 0 && <TeamBadge team={team} />}
-        <span className="gl-pill">{score.toLocaleString()} pts</span>
+        {team > 0 && <TeamBadge team={team} name={teamName} />}
+        {ranked && <span className="gl-pill">{score.toLocaleString()} pts</span>}
         {status === "reconnecting" && <span className="gl-pill" role="status">Reconnecting…</span>}
         {!compact && <SoundToggle muted={muted} onToggle={toggle} compact />}
         {!compact && (
@@ -275,7 +375,7 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
           </a>
         )}
       </header>
-      {view === "final" && final && final.rank <= 3 && <Confetti band={band} />}
+      {view === "final" && final && final.ranked !== false && final.rank <= 3 && <Confetti band={band} />}
       <main className="gl-main">
         {message && <div className="gl-alert" role="alert">{message}</div>}
         {view === "connecting" && <div className="gl-center"><p className="gl-sub">Joining game {pin}…</p></div>}
@@ -286,7 +386,7 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
               <div className="gl-sub">You&apos;re in!</div>
               <div className="gl-big gl-name">{shownName}</div>
             </div>
-            {team > 0 && <TeamBadge team={team} big />}
+            {team > 0 && <TeamBadge team={team} name={teamName} big />}
             <div className="gl-card gl-waiting">
               <span className="gl-waiting-title">{title}</span>
               <span>Look for your name on the big screen. The game starts soon<span className="gl-dots" aria-hidden="true"><i>.</i><i>.</i><i>.</i></span></span>
@@ -298,40 +398,75 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
           <>
             <div className="gl-row" style={{ justifyContent: "space-between" }}>
               <span className="gl-pill">{question.index + 1} of {question.total}</span>
-              {question.timed !== false && <GameTimer band={band} openedAt={question.openedAt} closesAt={question.closesAt} serverNow={serverNow} />}
+              {question.timed !== false && !talking && (
+                <GameTimer band={band} openedAt={question.talkEndsAt ?? question.openedAt} closesAt={question.closesAt} serverNow={serverNow} />
+              )}
             </div>
+            {talking && question.talkEndsAt && (
+              <TalkUntil until={question.talkEndsAt} serverNow={serverNow} onDone={() => setTalking(false)} />
+            )}
             {question.timed !== false && !compact && <LastSecondsTicks until={question.closesAt} serverNow={serverNow} tick={() => sound("tick")} />}
             {!compact && (
               <h1 className="gl-card gl-q">
                 {question.visual && <span className="gl-visual" aria-hidden="true">{question.visual}</span>}{question.text}
               </h1>
             )}
+            {question.image && pick !== "point" && !compact && (
+              <QuestionImageView image={question.image} reveal={question.reveal} openedAt={question.talkEndsAt ?? question.openedAt}
+                                 closesAt={question.closesAt} serverNow={serverNow} />
+            )}
+            {pick === "point" && question.image && (
+              <PinForm key={question.index} variant="game" image={question.image}
+                       onSubmit={(point) => send({ answer: { point } }, { shape: null, text: `Pin at ${Math.round(point.x * 100)}% across, ${Math.round(point.y * 100)}% down` })} />
+            )}
             {pick === "one" && (
               <div className="gl-tiles gl-in" data-count={question.choices.length}>
                 {question.choices.map((c, i) => (
-                  <GameTile key={i} index={i} text={compact ? "" : c} onClick={() => send({ choice: i }, { shape: i, text: c })} />
+                  <GameTile key={i} index={i} text={compact ? "" : c}
+                            onClick={talking ? undefined : () => send({ choice: i }, { shape: i, text: c })} />
                 ))}
               </div>
             )}
-            {pick === "many" && (
+            {!talking && pick === "many" && (
               <MultiSelectForm variant="game" choices={question.choices} compact={compact}
                                onSubmit={(choices) => send({ answer: { choices } },
                                  { shape: null, text: choices.map((i) => question.choices[i]).join(", ") })} />
             )}
-            {pick === "text" && (
+            {!talking && pick === "text" && (
               <TypeAnswerForm variant="game" onSubmit={(text) => send({ answer: { text } }, { shape: null, text })} />
             )}
-            {pick === "number" && question.slider && (
+            {!talking && pick === "number" && question.slider && (
               <SliderForm variant="game" slider={question.slider}
                           onSubmit={(value) => send({ answer: { value } },
                             { shape: null, text: formatNumber(value, question.slider!.step, question.slider!.unit ?? "") })} />
             )}
-            {pick === "order" && (
+            {!talking && pick === "order" && (
               <OrderList key={question.index} items={question.choices} busy={false} className="gl-card gl-order stack"
                          submitLabel="Lock in my order"
                          onSubmit={(order) => send({ answer: { order } }, { shape: null, text: order.map((i) => question.choices[i]).join(" → ") })} />
             )}
-            {pick === "categorise" && question.categorise && (
+            {pick === "scale" && question.scale && (
+              <ScaleForm key={question.index} variant="game" scale={question.scale}
+                         onSubmit={(value) => send({ answer: { value } }, { shape: null, text: String(value) })} />
+            )}
+            {pick === "ideas" && !votes && (
+              <IdeasForm key={question.index + (refused ? ":" + refused.message : "")} variant="game"
+                         max={question.brainstorm?.maxIdeas ?? 3} maxLength={question.brainstorm?.maxLength ?? 40}
+                         error={refused?.message ?? null} initial={refused ? refused.text.split("\n") : []}
+                         onSubmit={(ideas) => send({ answer: { ideas } }, { shape: null, text: ideas.join("\n") })} />
+            )}
+            {pick === "ideas" && votes && (
+              <VotesForm key={"v" + question.index} variant="game" ideas={votes.ideas} max={votes.maxVotes}
+                         onSubmit={(ids) => send({ answer: { votes: ids } },
+                           { shape: null, text: ids.map((id) => votes.ideas.find((i) => i.id === id)?.text ?? "").join(", ") })} />
+            )}
+            {(pick === "word" || pick === "long") && (
+              <FreeTextForm key={question.index + (refused ? ":" + refused.message + refused.text : "")} variant="game"
+                            long={pick === "long"} max={question.maxLength ?? (pick === "long" ? 250 : 20)}
+                            error={refused?.message ?? null} initial={refused?.text ?? ""}
+                            onSubmit={(text) => send({ answer: { text } }, { shape: null, text })} />
+            )}
+            {!talking && pick === "categorise" && question.categorise && (
               <CategoriseForm key={question.index} variant="game" data={question.categorise}
                               onSubmit={(categories) => send({ answer: { categories } },
                                 { shape: null, text: Object.keys(categories).length + " items sorted" })} />
@@ -358,7 +493,23 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
                 </span>
               </div>
             )}
-            <div className="gl-sub">Waiting for the others<span className="gl-dots" aria-hidden="true"><i>.</i><i>.</i><i>.</i></span></div>
+            {boostPending && question?.boosts && question.boosts.length > 0 && (
+              <fieldset className="gl-card gl-boost">
+                <legend className="gl-sub">How sure are you?</legend>
+                <p id="boost-rule" className="gl-boost-rule">Bet extra points: you win them if you&apos;re right, and lose them if you&apos;re wrong.</p>
+                <div className="gl-row center" style={{ flexWrap: "wrap" }}>
+                  {question.boosts.map((b) => (
+                    <button key={b} type="button" className="gl-btn gl-btn-big" aria-describedby="boost-rule"
+                            onClick={() => chooseBoost(b)}>+{b}</button>
+                  ))}
+                  <button type="button" className="gl-quiet" onClick={() => chooseBoost(0)}>No boost</button>
+                </div>
+              </fieldset>
+            )}
+            {boost !== null && boost > 0 && <div className="gl-pill" role="status">Boost: {boost} points at stake</div>}
+            {!boostPending && (
+              <div className="gl-sub">Waiting for the others<span className="gl-dots" aria-hidden="true"><i>.</i><i>.</i><i>.</i></span></div>
+            )}
           </div>
         )}
         {view === "result" && result && outcome && (
@@ -370,13 +521,14 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
                 {outcome === "correct" ? "✓" : outcome === "partial" ? "◐" : outcome === "vote" ? "★" : outcome === "wrong" ? "✕" : "⏱"}
               </div>
               <div className="gl-big">
-                {outcome === "correct" ? words.correct : outcome === "partial" ? "Partly right" : outcome === "vote" ? "Thanks for voting"
+                {outcome === "correct" ? words.correct : outcome === "partial" ? "Partly right"
+                  : outcome === "vote" ? (question && pickFor(question) !== "one" ? "Thanks for sharing" : "Thanks for voting")
                   : outcome === "wrong" ? words.wrong : words.timeUp}
               </div>
               {outcome === "partial" && result.fraction !== undefined && (
                 <div className="gl-sub">{Math.round(result.fraction * 100)}% of the way there</div>
               )}
-              {(outcome === "correct" || outcome === "partial") && (
+              {(outcome === "correct" || outcome === "partial") && result.ranked !== false && (
                 <>
                   <div className="pts">+{result.points.toLocaleString()} points</div>
                   {result.streakBonus > 0 && <div>🔥 Streak {result.streak} · +{result.streakBonus} bonus</div>}
@@ -390,9 +542,16 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
                   </span>
                 </div>
               )}
-              <div className="gl-sub">You are {ordinal(result.rank)} of {result.players} · {result.score.toLocaleString()} points</div>
+              {result.boost !== undefined && result.boost !== 0 && (
+                <div className={"gl-boost-result " + (result.boost > 0 ? "won" : "lost")}>
+                  {result.boost > 0 ? `Boost won: +${result.boost}` : `Boost lost: ${result.boost}`}
+                </div>
+              )}
+              {result.ranked !== false && (
+                <div className="gl-sub">You are {ordinal(result.rank)} of {result.players} · {result.score.toLocaleString()} points</div>
+              )}
               {result.team && result.teamRank && (
-                <div className="gl-sub"><TeamBadge team={result.team} /> is {ordinal(result.teamRank)} of {result.teams} teams</div>
+                <div className="gl-sub"><TeamBadge team={result.team} name={result.teamName} /> is {ordinal(result.teamRank)} of {result.teams} teams</div>
               )}
             </div>
           </div>
@@ -401,12 +560,18 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
           <div className="gl-center gl-in">
             <Buddy grade={lookGrade} mood="happy" />
             <div className="gl-sub">You finished</div>
-            <div className="gl-place">{ordinal(final.rank)}</div>
-            <div className="gl-sub">of {final.players} · {final.score.toLocaleString()} points · {final.correct} of {final.questions} correct</div>
-            {final.rank <= 3 && band !== "h912" && <span className="gl-pill">🏅 On the podium!</span>}
+            {final.ranked === false ? (
+              <div className="gl-big">{final.correct} of {final.questions} right</div>
+            ) : (
+              <>
+                <div className="gl-place">{ordinal(final.rank)}</div>
+                <div className="gl-sub">of {final.players} · {final.score.toLocaleString()} points · {final.correct} of {final.questions} correct</div>
+                {final.rank <= 3 && band !== "h912" && <span className="gl-pill">🏅 On the podium!</span>}
+              </>
+            )}
             {final.team && final.teamRank && (
               <div className="gl-sub">
-                <TeamBadge team={final.team} /> finished {ordinal(final.teamRank)} of {final.teams} teams{final.teamRank === 1 ? " 🏆" : ""}
+                <TeamBadge team={final.team} name={final.teamName} /> finished {ordinal(final.teamRank)} of {final.teams} teams{final.teamRank === 1 ? " 🏆" : ""}
               </div>
             )}
             {backUrl && <a className="gl-btn gl-btn-big" href={backUrl}>Back to my dashboard</a>}
@@ -421,6 +586,15 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
       </main>
     </GameLook>
   );
+}
+
+/** Team talk on the phone: a countdown, then the answers unlock. */
+function TalkUntil({ until, serverNow, onDone }: { until: number; serverNow: () => number; onDone: () => void }) {
+  useEffect(() => {
+    const id = setTimeout(onDone, Math.max(0, until - serverNow()));
+    return () => clearTimeout(id);
+  }, [until]); // eslint-disable-line react-hooks/exhaustive-deps
+  return <TalkCountdown until={until} serverNow={serverNow} />;
 }
 
 function IntroCountdown({ intro, serverNow, tick }: {

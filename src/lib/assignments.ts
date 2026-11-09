@@ -95,6 +95,11 @@ export interface PlayQuestion {
   title?: string | null;
   /** CATEGORISE: the categories and the items shuffled; answered by the items' shown places. */
   categorise?: { categories: string[]; items: string[] } | null;
+  /** Wave 2e: a scale's ends and labels; a free-text question's longest answer. */
+  scale?: { min: number; max: number; lowLabel?: string; highLabel?: string } | null;
+  maxLength?: number | null;
+  /** Wave 2h: the question's image (and reveal), as the stand-in until 2f's signed links. */
+  image?: { url: string; alt: string; width?: number; height?: number; reveal?: boolean } | null;
 }
 
 export interface PlayState {
@@ -146,6 +151,8 @@ export type TypedAnswer =
   | { text: string; answer: { text: string } }
   | { value: number; answer: { value: number } }
   | { answer: { categories: Record<number, number> } }
+  | { answer: { point: { x: number; y: number } } }
+  | { answer: { ideas: string[] } }
   | { answer: Record<string, never> };
 
 export const typedAnswer = {
@@ -154,6 +161,8 @@ export const typedAnswer = {
   value: (value: number): TypedAnswer => ({ value, answer: { value } }),
   /** A categorise question: each item's shown place to the category it was put in (only nested: it has no flat form). */
   categories: (categories: Record<number, number>): TypedAnswer => ({ answer: { categories } }),
+  /** Wave 2h: a pin on the image, each coordinate a share of its width and height (only nested). */
+  point: (point: { x: number; y: number }): TypedAnswer => ({ answer: { point } }),
   /** A slide: nothing to answer, Continue moves the attempt on. */
   seen: (): TypedAnswer => ({ answer: {} }),
 };

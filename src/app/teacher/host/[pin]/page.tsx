@@ -6,7 +6,7 @@ import { type CSSProperties, useCallback, useEffect, useRef, useState } from "re
 import { GAME_MODES, GameTimer, TeamBadge, useCountdown } from "@/components/Stage";
 import { GameLook } from "@/components/live/GameLook";
 import { Buddy, Confetti } from "@/components/live/LookArt";
-import { LastSecondsTicks, PlayerBadge, SoundToggle } from "@/components/live/GameBits";
+import { LastSecondsTicks, PlayerBadge, SoundToggle, TalkCountdown } from "@/components/live/GameBits";
 import { lookBand, lookWords, type Band } from "@/lib/gameLook";
 import { lobbyLength, useGameSound } from "@/lib/gameSound";
 import { api } from "@/lib/api";
@@ -17,6 +17,9 @@ import { OwnerBrandMark, useOwnerBrand } from "@/components/OwnerBrand";
 import { JoinQr, RoomPatternCard } from "@/components/live/JoinExtras";
 import { HostOpenAnswers, HostResults, HostSlide, type HostClosed, type HostQuestion } from "@/components/live/HostQuestion";
 import { type Pick, pickOf } from "@/lib/questionTypes";
+import { BrainstormResults, BrainstormWall, ClassAnswerPanel, type IdeasState, LectureSummary, type SummaryRow }
+  from "@/components/live/ClassAnswer";
+import { QuestionImageView } from "@/components/ImageQuestion";
 
 interface Hosted {
   gameId: string;
@@ -42,6 +45,8 @@ interface Player {
   team: number;
   /** Joined with the PIN and a nickname, not signed in. */
   guest?: boolean;
+  /** A shared team device: the first names of the people on it. */
+  members?: string[];
 }
 
 interface TeamStanding {
@@ -49,6 +54,16 @@ interface TeamStanding {
   team: number;
   score: number;
   members: number;
+  /** Wave 2d: the team's name. */
+  name?: string;
+}
+
+/** One device per player: each team's best player, shown on the podium. */
+interface BestPlayer {
+  team: number;
+  teamName: string;
+  name: string;
+  score: number;
 }
 
 interface Ranked {
@@ -65,6 +80,8 @@ interface Question extends HostQuestion {
   closesAt: number;
   /** False in an accuracy game: no countdown, the teacher closes the question. */
   timed?: boolean;
+  /** Team talk: answers open (and the timer starts) at this server time. */
+  talkEndsAt?: number;
 }
 
 interface Closed extends HostClosed {
@@ -103,8 +120,17 @@ function HostScreen() {
   const [question, setQuestion] = useState<Question | null>(null);
   const [answered, setAnswered] = useState({ answered: 0, expected: 0 });
   const [closed, setClosed] = useState<Closed | null>(null);
-  const [podium, setPodium] = useState<{ top: Ranked[]; leaderboard: Ranked[]; teams?: TeamStanding[] } | null>(null);
+  const [podium, setPodium] = useState<{ top: Ranked[]; leaderboard: Ranked[]; teams?: TeamStanding[];
+    ranked?: boolean; summary?: SummaryRow[]; bestPlayers?: BestPlayer[] } | null>(null);
+  const [teamNames, setTeamNames] = useState<string[]>([]);
+  const [teamDevices, setTeamDevices] = useState("EACH");
+  const [teamTalk, setTeamTalk] = useState(0);
+  // A brainstorm question's wall (Wave 2i).
+  const [ideas, setIdeas] = useState<IdeasState | null>(null);
   const [mode, setMode] = useState("CLASSIC");
+  // Unplugged: nobody joins; the teacher answers for the class. Confidence: players may boost their answers.
+  const [playersJoin, setPlayersJoin] = useState(true);
+  const [confidence, setConfidence] = useState(false);
   const [teamCount, setTeamCount] = useState(0);
   // After a question closes: its answers first, then the leaderboard when the teacher asks for it.
   const [showBoard, setShowBoard] = useState(false);
@@ -120,11 +146,17 @@ function HostScreen() {
       case "state": {
         setMode(String(m.mode ?? "CLASSIC"));
         setTeamCount(Number(m.teamCount ?? 0));
+        setPlayersJoin(m.playersJoin !== false);
+        setConfidence(m.confidence === true);
+        setTeamNames((m.teamNames as string[]) ?? []);
+        setTeamDevices(String(m.teamDevices ?? "EACH"));
+        setTeamTalk(Number(m.teamTalkSeconds ?? 0));
         setPlayers((m.players as Player[]) ?? []);
         setPlayerCount(Number(m.count ?? (m.players as Player[] | undefined)?.length ?? 0));
         const phase = String(m.phase);
         if (phase === "LOBBY") setView("lobby");
         if (phase === "QUESTION" && m.question) {
+          setIdeas((m.ideas as IdeasState | undefined) ?? null);
           setQuestion(m.question as unknown as Question);
           setAnswered({ answered: Number(m.answered ?? 0), expected: Number(m.expected ?? 0) });
           setView("question");
@@ -133,17 +165,20 @@ function HostScreen() {
           const lq = m.lastQuestion as Record<string, unknown>;
           setQuestion({ index: Number(lq.index), total: Number(m.total), text: String(lq.text), visual: (lq.visual as string) ?? null,
             choices: (lq.choices as string[]) ?? [], openedAt: 0, closesAt: 0, qtype: lq.qtype as string | undefined,
-            pick: lq.pick as Pick | undefined, slider: lq.slider as HostQuestion["slider"], title: lq.title as string | undefined });
+            pick: lq.pick as Pick | undefined, slider: lq.slider as HostQuestion["slider"], title: lq.title as string | undefined,
+            scale: lq.scale as HostQuestion["scale"], image: lq.image as HostQuestion["image"], reveal: lq.reveal === true });
           setClosed({ index: Number(lq.index), correctIndex: Number(lq.correctIndex), explanation: (lq.explanation as string) ?? null,
             counts: (lq.counts as number[]) ?? [], answered: 0, leaderboard: (m.leaderboard as Ranked[]) ?? [],
             teams: (m.teams as TeamStanding[]) ?? undefined, last: Number(lq.index) + 1 >= Number(m.total),
             qtype: lq.qtype as string | undefined, correctIndexes: lq.correctIndexes as number[] | undefined,
-            key: lq.key as HostClosed["key"], stats: lq.stats as HostClosed["stats"] });
+            key: lq.key as HostClosed["key"], stats: lq.stats as HostClosed["stats"],
+            shown: typeof lq.shown === "boolean" ? lq.shown : undefined });
           setView("results");
         }
         if (phase === "PODIUM") {
           setPodium({ top: ((m.leaderboard as Ranked[]) ?? []).slice(0, 3), leaderboard: (m.leaderboard as Ranked[]) ?? [],
-            teams: (m.teams as TeamStanding[]) ?? undefined });
+            teams: (m.teams as TeamStanding[]) ?? undefined, ranked: m.ranked !== false, summary: m.summary as SummaryRow[] | undefined,
+            bestPlayers: m.bestPlayers as BestPlayer[] | undefined });
           setView("podium");
         }
         break;
@@ -157,6 +192,7 @@ function HostScreen() {
         setView("intro");
         break;
       case "question":
+        setIdeas(null);
         setQuestion(m as unknown as Question);
         setAnswered({ answered: 0, expected: Number(m.expected ?? 0) });
         setView("question");
@@ -171,8 +207,19 @@ function HostScreen() {
         setShowBoard(false);
         setView("results");
         break;
+      case "ideas":
+        setIdeas(m as unknown as IdeasState);
+        break;
+      case "moderated":
+        // The teacher hid an answer: the stats come again without it.
+        setClosed((c) => (c && c.index === Number(m.index) ? { ...c, stats: m.stats as HostClosed["stats"], answered: Number(m.answered) } : c));
+        break;
+      case "shown":
+        setClosed((c) => (c && c.index === Number(m.index) ? { ...c, shown: true } : c));
+        break;
       case "podium":
-        setPodium({ top: (m.top as Ranked[]) ?? [], leaderboard: (m.leaderboard as Ranked[]) ?? [], teams: (m.teams as TeamStanding[]) ?? undefined });
+        setPodium({ top: (m.top as Ranked[]) ?? [], leaderboard: (m.leaderboard as Ranked[]) ?? [], teams: (m.teams as TeamStanding[]) ?? undefined,
+          ranked: m.ranked !== false, summary: m.summary as SummaryRow[] | undefined, bestPlayers: m.bestPlayers as BestPlayer[] | undefined });
         setView("podium");
         break;
       case "error":
@@ -251,7 +298,19 @@ function HostScreen() {
       <main className="gl-main">
         {error && <div className="gl-alert danger" role="alert">{error}</div>}
 
-        {view === "lobby" && game && (
+        {view === "lobby" && game && !playersJoin && (
+          <div className="gl-center gl-in">
+            <Buddy grade={look} />
+            <h1 className="gl-title">Unplugged game</h1>
+            <p style={{ margin: 0, maxWidth: 640, textAlign: "center" }}>
+              No devices for students: show each question, let the class talk it over, then tap the class&apos;s answer
+              on this screen and reveal it. Nobody joins with a PIN.
+            </p>
+            <button type="button" className="gl-btn gl-btn-big" onClick={() => send("start")}>Start game</button>
+          </div>
+        )}
+
+        {view === "lobby" && game && playersJoin && (
           <>
             <div className="gl-lobby-top gl-in">
               <div className="gl-card gl-join" style={{ "--i": 0 } as CSSProperties}>
@@ -270,14 +329,18 @@ function HostScreen() {
             </div>
             <p style={{ textAlign: "center", margin: 0 }}>
               {GAME_MODES.find((g) => g.value === mode)?.label ?? "Classic"} game
-              {mode === "TEAM" && <> · {teamCount} teams, filled as players join</>}
+              {mode === "TEAM" && teamDevices !== "SHARED" && <> · {teamCount} teams, filled as players join</>}
+              {mode === "TEAM" && teamDevices === "SHARED" && <> · {teamCount} teams, one device each</>}
+              {mode === "TEAM" && teamTalk > 0 && <> · {teamTalk} seconds of team talk per question</>}
               {mode === "ACCURACY" && <> · no timer: you close each question</>}
+              {mode === "LECTURE" && <> · no timer, no points: you close each question</>}
+              {confidence && <> · Confidence on: players may boost their answers</>}
             </p>
             {mode === "TEAM" && teamCount > 0 && (
               <div className="gl-row center">
                 {Array.from({ length: teamCount }, (_, i) => i + 1).map((t) => (
                   <span key={t} className="gl-row" style={{ gap: 6 }}>
-                    <TeamBadge team={t} /> {players.filter((p) => p.team === t).length}
+                    <TeamBadge team={t} name={teamNames[t - 1]} /> {players.filter((p) => p.team === t).length}
                   </span>
                 ))}
               </div>
@@ -289,7 +352,12 @@ function HostScreen() {
                 Start game
               </button>
             </div>
-            <ul className="gl-chips gl-in" aria-label="Players">
+            {mode === "TEAM" && teamCount > 0 && players.length > 0 && (
+              <TeamLobby players={players} teamCount={teamCount} names={teamNames} canMove={teamDevices !== "SHARED"}
+                         onMove={(playerId, team) => send("moveTeam", { playerId, team })}
+                         onKick={(p) => window.confirm(`Remove ${p.name} from the game?`) && send("kick", { playerId: p.id })} />
+            )}
+            <ul className="gl-chips gl-in" aria-label="Players" hidden={mode === "TEAM" && teamCount > 0}>
               {players.map((p, i) => (
                 <li key={p.id} className={"gl-chip" + (p.connected ? "" : " away")} style={{ "--i": Math.min(i, 20) } as CSSProperties}>
                   <PlayerBadge name={p.name} size={26} />
@@ -322,8 +390,9 @@ function HostScreen() {
               {question.timed !== false && band !== "h912" && (
                 <GameTimer band={band} openedAt={question.openedAt} closesAt={question.closesAt} serverNow={serverNow} />
               )}
-              <div className="gl-answered" aria-live="polite"><b>{answered.answered}</b>of {answered.expected} answered</div>
-              {question.timed === false
+              {playersJoin && <div className="gl-answered" aria-live="polite"><b>{answered.answered}</b>of {answered.expected} answered</div>}
+              {!playersJoin ? <button type="button" className="gl-quiet" onClick={() => send("skip")}>Skip</button>
+                : question.timed === false
                 ? <button type="button" className="gl-btn" onClick={() => send("skip")}>Close question</button>
                 : <button type="button" className="gl-quiet" onClick={() => send("skip")}>Skip</button>}
             </div>
@@ -331,13 +400,24 @@ function HostScreen() {
               <GameTimer band={band} openedAt={question.openedAt} closesAt={question.closesAt} serverNow={serverNow} />
             )}
             {question.timed !== false && <LastSecondsTicks until={question.closesAt} serverNow={serverNow} tick={() => sound("tick")} />}
+            {question.talkEndsAt && <TalkCountdown until={question.talkEndsAt} serverNow={serverNow} host />}
             <div className="gl-q-row gl-in">
               <h1 className="gl-card gl-q">
                 {question.visual && <span className="gl-visual" aria-hidden="true">{question.visual}</span>}{question.text}
               </h1>
               <Buddy grade={look} className="gl-buddy-side" />
             </div>
-            <HostOpenAnswers question={question} />
+            {question.image && pickFor(question) !== "point" && (
+              <QuestionImageView image={question.image} reveal={question.reveal} openedAt={question.talkEndsAt ?? question.openedAt}
+                                 closesAt={question.closesAt} serverNow={serverNow} />
+            )}
+            {pickFor(question) === "ideas" && playersJoin && ideas && ideas.index === question.index ? (
+              <BrainstormWall state={ideas} onHide={(id) => send("hide", { index: question.index, id })}
+                              onMerge={(ids) => send("merge", { index: question.index, ids })}
+                              onShow={() => send("show", { index: question.index })} onNext={() => send("next")} />
+            ) : playersJoin ? <HostOpenAnswers question={question} />
+              : <ClassAnswerPanel key={question.index} question={question}
+                                  onAnswer={(answer) => send("classAnswer", { index: question.index, answer })} />}
           </>
         )}
 
@@ -357,7 +437,10 @@ function HostScreen() {
               </h1>
               <Buddy grade={look} mood="happy" className="gl-buddy-side" />
             </div>
-            <HostResults question={question} closed={closed} />
+            {(closed.qtype ?? question.qtype) === "BRAINSTORM" ? (
+              <BrainstormResults ideas={((closed.stats as { ideas?: { id: string; text: string; votes: number }[] } | undefined)?.ideas) ?? []} />
+            ) : <HostResults question={question} closed={closed}
+                         moderation={{ onHide: (id) => send("hide", { index: closed.index, id }), onShow: () => send("show", { index: closed.index }) }} />}
           </>
         )}
 
@@ -376,13 +459,39 @@ function HostScreen() {
           </>
         )}
 
-        {view === "podium" && podium && (
+        {view === "podium" && podium && podium.ranked === false && (
+          <>
+            <h1 className="gl-title">That&apos;s the end of the lecture</h1>
+            <LectureSummary rows={podium.summary ?? []} />
+            <div className="gl-row center">
+              {game && <Link className="gl-btn" href={"/teacher/games/" + game.gameId}>See the full report</Link>}
+            </div>
+          </>
+        )}
+
+        {view === "podium" && podium && podium.ranked !== false && (
           <>
             <Confetti band={band} />
-            <h1 className="gl-title">{words.podium}</h1>
+            <h1 className="gl-title">{!playersJoin ? "The class finished!" : words.podium}</h1>
             {podium.teams && podium.teams.length > 0 && (
               <div style={{ maxWidth: 900, margin: "0 auto", width: "100%" }}>
-                <TeamStandings teams={podium.teams} title={"Team " + podium.teams[0].team + " wins!"} />
+                <TeamStandings teams={podium.teams.slice(0, 3)}
+                               title={(podium.teams[0].name ?? "Team " + podium.teams[0].team) + " wins!"} />
+                {podium.bestPlayers && podium.bestPlayers.length > 0 && (
+                  <>
+                    <h2 style={{ margin: "16px 0 8px" }}>Each team&apos;s best player</h2>
+                    <ul className="team-standings">
+                      {podium.bestPlayers.map((b) => (
+                        <li key={b.team}>
+                          <TeamBadge team={b.team} name={b.teamName} />
+                          <span>{b.name}</span>
+                          <span className="spacer" />
+                          <span>{b.score.toLocaleString()}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
               </div>
             )}
             <Podium top={podium.top} grade={look} band={band} />
@@ -437,13 +546,58 @@ function TeamStandings({ teams, title }: { teams: TeamStanding[]; title: string 
         {teams.map((t) => (
           <li key={t.team}>
             <span>{t.rank}.</span>
-            <TeamBadge team={t.team} big />
+            <TeamBadge team={t.team} name={t.name} big />
             <span style={{ opacity: 0.8, fontSize: 16 }}>{t.members} {t.members === 1 ? "player" : "players"}</span>
             <span className="spacer" />
             <span>{t.score} <span style={{ fontSize: 14 }}>average</span></span>
           </li>
         ))}
       </ol>
+    </div>
+  );
+}
+
+/**
+ * One device per player: the lobby grouped by team, with a "Move to" menu (a native select, so it works from the
+ * keyboard and a screen reader) on each player. One device per team: each device with its first names.
+ */
+function TeamLobby({ players, teamCount, names, canMove, onMove, onKick }: {
+  players: Player[];
+  teamCount: number;
+  names: string[];
+  canMove: boolean;
+  onMove: (playerId: string, team: number) => void;
+  onKick: (p: Player) => void;
+}) {
+  return (
+    <div className="gl-team-lobby gl-in">
+      {Array.from({ length: teamCount }, (_, i) => i + 1).map((t) => {
+        const here = players.filter((p) => p.team === t);
+        const name = names[t - 1] ?? "Team " + t;
+        return (
+          <section key={t} className="gl-card gl-team-col" aria-label={name}>
+            <h2><TeamBadge team={t} name={name} /> <span className="gl-sub">{here.length}</span></h2>
+            <ul>
+              {here.map((p) => (
+                <li key={p.id} className={p.connected ? "" : "away"}>
+                  <span className="nm">{p.name}</span>
+                  {p.members && p.members.length > 0 && <span className="gl-sub">{p.members.join(", ")}</span>}
+                  {canMove && (
+                    <select aria-label={"Move " + p.name + " to another team"} value={t}
+                            onChange={(e) => onMove(p.id, Number(e.target.value))}>
+                      {Array.from({ length: teamCount }, (_, k) => k + 1).map((o) => (
+                        <option key={o} value={o}>{o === t ? "Move to…" : names[o - 1] ?? "Team " + o}</option>
+                      ))}
+                    </select>
+                  )}
+                  <button type="button" className="gl-quiet" aria-label={"Remove " + p.name} onClick={() => onKick(p)}>×</button>
+                </li>
+              ))}
+              {here.length === 0 && <li className="gl-sub">Nobody yet</li>}
+            </ul>
+          </section>
+        );
+      })}
     </div>
   );
 }

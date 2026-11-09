@@ -153,14 +153,27 @@ export function ordinal(n: number): string {
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
 
-/** A team in a team game: its colour (from the school's theme) and always its number, so colour is never the only cue. */
-export function TeamBadge({ team, big = false }: { team: number; big?: boolean }) {
-  return <span className={"team-badge team-" + team + (big ? " big" : "")}>Team {team}</span>;
+/**
+ * A team in a team game: its colour (from the school's theme) and always its name (or number), so colour is never the
+ * only cue. {@code name}: the team's name (Wave 2d); a game from before names shows "Team 2".
+ */
+export function TeamBadge({ team, name, big = false }: { team: number; name?: string | null; big?: boolean }) {
+  return <span className={"team-badge team-" + team + (big ? " big" : "")}>{name || "Team " + team}</span>;
 }
 
-/** The game modes a teacher can host, with the one-line description shown when choosing. */
-export const GAME_MODES: { value: "CLASSIC" | "TEAM" | "ACCURACY"; label: string; text: string }[] = [
+/** The team-talk pauses a teacher can choose (seconds; 0 is none). */
+export const TEAM_TALK_SECONDS = [0, 5, 10, 15];
+
+export type GameModeValue = "CLASSIC" | "TEAM" | "ACCURACY" | "LECTURE" | "UNPLUGGED";
+
+/** The game modes a teacher can host, with the one-line description shown when choosing (wave2-contract.md). */
+export const GAME_MODES: { value: GameModeValue; label: string; text: string }[] = [
   { value: "CLASSIC", label: "Classic", text: "Everyone for themselves. Faster right answers earn more points." },
   { value: "TEAM", label: "Team", text: "Players are put in even teams as they join. A team scores its members' average." },
   { value: "ACCURACY", label: "Accuracy", text: "No timer and no rush: every right answer earns the same. You close each question." },
+  { value: "LECTURE", label: "Lecture", text: "Check understanding without a contest: no timer, no points, no leaderboard." },
+  { value: "UNPLUGGED", label: "Unplugged", text: "No devices for students. The class talks it over and you tap their answer here." },
 ];
+
+/** Players may add a boost to their answers in these modes (Confidence). */
+export const CONFIDENCE_MODES: GameModeValue[] = ["CLASSIC", "TEAM", "ACCURACY"];

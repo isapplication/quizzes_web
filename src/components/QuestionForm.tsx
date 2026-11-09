@@ -3,6 +3,7 @@
 import { useId, useState } from "react";
 import { AnswerShape, shapeName, shapeNumber } from "@/components/AnswerShape";
 import { POINTS, TIMES } from "@/lib/content";
+import { AreaEditor } from "@/components/ImageQuestion";
 import {
   type EditorPayload, type EditorQuestion, LIMITS, QTYPES, QTYPE_HINT, QTYPE_LABEL, type QType, scored,
 } from "@/lib/questionTypes";
@@ -71,6 +72,39 @@ export function QuestionForm({ index, q, total, problem, onChange, onType, onMov
       {q.type === "SLIDER" && <SliderFields payload={q.payload} onChange={setPayload} />}
       {q.type === "PUZZLE" && <PuzzleFields items={q.choices} onChange={(choices) => onChange({ choices })} />}
       {q.type === "CATEGORISE" && <CategoriseFields payload={q.payload} onChange={setPayload} />}
+      {q.type === "SCALE" && <ScaleFields payload={q.payload} onChange={setPayload} />}
+      {q.type === "BRAINSTORM" && (
+        <fieldset className="type-edits">
+          <legend>Brainstorm rounds</legend>
+          <div className="form-grid">
+            <div className="field">
+              <label htmlFor={id + "-ideas"}>Ideas round</label>
+              <select id={id + "-ideas"} value={q.payload.ideaSeconds ?? 120} onChange={(e) => setPayload({ ideaSeconds: Number(e.target.value) })}>
+                {[30, 60, 90, 120, 180, 240].map((s) => <option key={s} value={s}>{s < 60 ? s + " seconds" : s / 60 + (s === 60 ? " minute" : " minutes")}</option>)}
+              </select>
+            </div>
+            <div className="field">
+              <label htmlFor={id + "-votes"}>Votes round</label>
+              <select id={id + "-votes"} value={q.payload.voteSeconds ?? 30} onChange={(e) => setPayload({ voteSeconds: Number(e.target.value) })}>
+                {[15, 30, 45, 60, 90, 120].map((s) => <option key={s} value={s}>{s} seconds</option>)}
+              </select>
+            </div>
+          </div>
+          <p className="hint" style={{ margin: 0 }}>
+            Players send up to 3 ideas, then vote for up to 3 of the others&apos;. You can hide or merge ideas, and end either
+            round early. In an assignment, students only send ideas.
+          </p>
+        </fieldset>
+      )}
+      {(q.type === "PIN_ANSWER" || q.type === "DROP_PIN" || q.type === "QUIZ" || q.type === "TYPE_ANSWER") && (
+        <ImageFields type={q.type} payload={q.payload} onChange={setPayload} />
+      )}
+      {(q.type === "WORD_CLOUD" || q.type === "OPEN_ENDED") && (
+        <p className="hint" style={{ margin: 0 }}>
+          Players type {q.type === "WORD_CLOUD" ? `one word or short phrase (up to ${LIMITS.cloudWord} characters)` : `up to ${LIMITS.openText} characters`}.
+          Rude words are refused, and nothing shows on the classroom screen until you choose Show answers; you can hide any answer.
+        </p>
+      )}
 
       {!slide && (
         <div className="form-grid">
@@ -88,7 +122,9 @@ export function QuestionForm({ index, q, total, problem, onChange, onType, onMov
               </select>
             </div>
           ) : (
-            <p className="hint" style={{ alignSelf: "end" }}>A poll gives no points and isn&apos;t counted as right or wrong.</p>
+            <p className="hint" style={{ alignSelf: "end" }}>
+              {q.type === "POLL" ? "A poll" : "This question"} gives no points and isn&apos;t counted as right or wrong.
+            </p>
           )}
         </div>
       )}
@@ -242,6 +278,91 @@ function SliderFields({ payload, onChange }: { payload: EditorPayload; onChange:
           down to none at half the range away.
         </p>
       )}
+    </fieldset>
+  );
+}
+
+/**
+ * Wave 2h: the question's image. A stand-in until part 2f's uploads: the picture's address (https or a page of this
+ * site) and its description (alt text, required: W21); its size is read when it loads, so pins keep its proportions.
+ * Pin answer: the right areas. Quiz and type answer: an optional picture that may uncover bit by bit (W30).
+ */
+function ImageFields({ type, payload, onChange }: { type: string; payload: EditorPayload; onChange: (patch: EditorPayload) => void }) {
+  const id = useId();
+  const img = payload.image ?? { url: "", alt: "" };
+  const needs = type === "PIN_ANSWER" || type === "DROP_PIN";
+  const setImg = (patch: Partial<typeof img>) => onChange({ image: { ...img, ...patch } });
+  const ready = img.url.trim() !== "";
+  return (
+    <fieldset className="type-edits">
+      <legend>{needs ? "Image" : "Image (optional)"}</legend>
+      <div className="form-grid">
+        <div className="field">
+          <label htmlFor={id + "-url"}>Image address</label>
+          <input id={id + "-url"} type="url" maxLength={LIMITS.imageUrl} value={img.url} placeholder="https://…"
+                 aria-describedby={id + "-url-hint"} onChange={(e) => setImg({ url: e.target.value, width: undefined, height: undefined })} />
+          <p className="hint" id={id + "-url-hint"}>A secure (https) link, or a page of this site. Uploads come with image support.</p>
+        </div>
+        <div className="field">
+          <label htmlFor={id + "-alt"}>Describe the image</label>
+          <input id={id + "-alt"} type="text" maxLength={LIMITS.alt} value={img.alt} aria-describedby={id + "-alt-hint"}
+                 onChange={(e) => setImg({ alt: e.target.value })} placeholder="e.g. A map of the school farm" />
+          <p className="hint" id={id + "-alt-hint"}>Read aloud for anyone who can&apos;t see it. {img.alt.length} / {LIMITS.alt}</p>
+        </div>
+      </div>
+      {ready && (
+        // eslint-disable-next-line @next/next/no-img-element -- reads the picture's size; shown small as a preview
+        <img src={img.url} alt="" hidden onLoad={(e) => {
+          const t = e.currentTarget;
+          if (t.naturalWidth && (t.naturalWidth !== img.width || t.naturalHeight !== img.height)) setImg({ width: t.naturalWidth, height: t.naturalHeight });
+        }} />
+      )}
+      {ready && type === "PIN_ANSWER" && (
+        <AreaEditor image={{ ...img, url: img.url.trim() }} areas={payload.areas ?? []} onChange={(areas) => onChange({ areas })} />
+      )}
+      {ready && (type === "QUIZ" || type === "TYPE_ANSWER") && (
+        <label className="check">
+          <input type="checkbox" checked={payload.reveal === true} onChange={(e) => onChange({ reveal: e.target.checked })} />
+          <span>Uncover the picture bit by bit <span className="muted">(five steps over the time limit)</span></span>
+        </label>
+      )}
+    </fieldset>
+  );
+}
+
+/** Scale (W14): from 0 or 1 up to 10, with a short label at each end. 0–10 also shows a Net Promoter Score. */
+function ScaleFields({ payload, onChange }: { payload: EditorPayload; onChange: (patch: EditorPayload) => void }) {
+  const id = useId();
+  const min = payload.min ?? 1;
+  const max = payload.max ?? 5;
+  return (
+    <fieldset className="type-edits">
+      <legend>Scale</legend>
+      <div className="form-grid">
+        <div className="field">
+          <label htmlFor={id + "-min"}>From</label>
+          <select id={id + "-min"} value={min} onChange={(e) => onChange({ min: Number(e.target.value) })}>
+            {[0, 1].map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </div>
+        <div className="field">
+          <label htmlFor={id + "-max"}>To</label>
+          <select id={id + "-max"} value={max} onChange={(e) => onChange({ max: Number(e.target.value) })}>
+            {Array.from({ length: LIMITS.scaleMax - 1 }, (_, i) => i + 2).map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </div>
+        <div className="field">
+          <label htmlFor={id + "-low"}>Label at {min}</label>
+          <input id={id + "-low"} type="text" maxLength={LIMITS.scaleLabel} value={payload.lowLabel ?? ""}
+                 placeholder="e.g. Not at all" onChange={(e) => onChange({ lowLabel: e.target.value })} />
+        </div>
+        <div className="field">
+          <label htmlFor={id + "-high"}>Label at {max}</label>
+          <input id={id + "-high"} type="text" maxLength={LIMITS.scaleLabel} value={payload.highLabel ?? ""}
+                 placeholder="e.g. Very sure" onChange={(e) => onChange({ highLabel: e.target.value })} />
+        </div>
+      </div>
+      {min === 0 && max === 10 && <p className="hint">A 0 to 10 scale also shows the Net Promoter Score.</p>}
     </fieldset>
   );
 }

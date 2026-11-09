@@ -916,3 +916,36 @@ input[type=email], input[type=tel], input[type=password], input[type=search] {
 .template-card p { margin: 0 0 6px; font-size: 13px; }
 .grade-badge { display: inline-flex; align-items: center; cursor: help; margin-left: 4px; }
 .grade-badge-icon { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; background: var(--warn, #e8a735); color: #fff; font-size: 12px; font-weight: 700; }
+
+/* Wave 2d: team names in the host box. */
+.team-names { display: flex; flex-wrap: wrap; gap: 8px; }
+.team-name-field input { inline-size: 12em; max-inline-size: 100%; }
+.report-entries { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; overflow-wrap: anywhere; }
+.scale-form .scale-point { border: 2px solid var(--line, #ccc); }
+
+/* Wave 2h: image questions (shared by the game screens, the editor and the assignment page). */
+.qimg-figure { margin: 0; display: grid; gap: 6px; justify-items: center; inline-size: 100%; }
+.qimg-target { inline-size: 100%; max-inline-size: 720px; margin-inline: auto; cursor: crosshair; }
+.qimg { position: relative; inline-size: 100%; max-block-size: 60vh; overflow: hidden; border-radius: 12px; background: var(--sc, #eee); }
+.qimg img { display: block; inline-size: 100%; block-size: 100%; object-fit: contain; -webkit-user-select: none; user-select: none; }
+.qimg-overlay { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; pointer-events: none; }
+.qimg-area { fill: color-mix(in srgb, var(--success, green) 30%, transparent); stroke: var(--success, green); stroke-width: 0.6; stroke-dasharray: 2 1; }
+.qimg-dot { fill: var(--pc); stroke: #fff; stroke-width: 0.3; }
+.qimg-pin, .qimg-handle { position: absolute; translate: -50% -50%; min-inline-size: 32px; min-block-size: 32px; border-radius: 50% 50% 50% 0;
+  border: 3px solid #fff; background: var(--pc); color: var(--pc-ink, #fff); font-weight: 800; cursor: grab; touch-action: none;
+  -webkit-user-select: none; user-select: none; box-shadow: 0 2px 6px rgb(0 0 0 / 0.4); }
+.qimg-pin { rotate: -45deg; }
+.qimg-handle { border-radius: 50%; }
+.qimg-pin.dragging, .qimg-handle.dragging { cursor: grabbing; }
+.qimg-pin:focus-visible, .qimg-handle:focus-visible { outline: 3px solid var(--tc, #000); outline-offset: 3px; }
+.qimg-place { position: absolute; inset-block-end: 8px; inset-inline-start: 50%; translate: -50% 0; }
+.qimg-note { font-size: 14px; text-align: center; }
+.qimg-cover { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(5, 1fr); }
+.qimg-cover span { background: var(--sc, #333); transition: opacity 600ms ease; }
+.qimg-cover span.open { opacity: 0; }
+@media (prefers-reduced-motion: reduce) { .qimg-cover span { transition: none; } }
+@media (forced-colors: active) { .qimg-cover span { background: Canvas; } .qimg-area { stroke: Highlight; } }
+.area-fields { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; border: 1px solid var(--line, #ddd); border-radius: 8px; padding: 8px; }
+.area-fields input { inline-size: 6em; }
+.vote-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.vote-list label { min-block-size: 32px; overflow-wrap: anywhere; }
