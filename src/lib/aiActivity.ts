@@ -33,6 +33,11 @@ export interface AiRun {
   device: string | null;
   /** Console only. */
   schoolName: string | null;
+  /** Wave 3: QUIZ, LESSON (or RETEACH, SUMMARY later), and what it was drafted from; only the source's title and size are kept. */
+  kind?: string | null;
+  sourceKind?: "TOPIC" | "TEXT" | "WIKIPEDIA" | "PDF" | "PHOTOS" | null;
+  sourceTitle?: string | null;
+  sourcePages?: number | null;
 }
 
 export interface AiDraft {

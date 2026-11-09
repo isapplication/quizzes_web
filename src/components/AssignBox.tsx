@@ -16,6 +16,7 @@ export function AssignBox({ target }: { target: HostTarget }) {
   const school = !isIndependent(me);
   const [classCode, setClassCode] = useState("");
   const [signedInOnly, setSignedInOnly] = useState(false);
+  const [practice, setPractice] = useState(false);
   const [due, setDue] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,7 +31,7 @@ export function AssignBox({ target }: { target: HostTarget }) {
       setMade(await api<AssignmentSummary>("/api/v1/assignments", {
         method: "POST",
         body: {
-          ...target, classCode: classCode || null, requireSignIn: school && signedInOnly,
+          ...target, classCode: classCode || null, requireSignIn: school && signedInOnly, practice,
           // The picker gives local time; the API wants an instant.
           dueAt: due ? new Date(due).toISOString() : null,
         },
@@ -58,6 +59,7 @@ export function AssignBox({ target }: { target: HostTarget }) {
         <p style={{ margin: 0 }}>
           Students open this link and do it at their own pace{made.classCode && <> (class {made.classCode} also sees it on their home page)</>}.
           {made.dueAt && <> {dueText(made.dueAt)}.</>}
+          {made.practice && <> Practice: wrong answers come back at the end, up to 2 more times.</>}
         </p>
         <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
           <input type="text" readOnly value={made.link} aria-label="Assignment link" style={{ flex: "1 1 260px", minWidth: 0 }}
@@ -99,6 +101,13 @@ export function AssignBox({ target }: { target: HostTarget }) {
           <span>Only signed-in students of {me.school.name} <span className="muted">(results saved to each student)</span></span>
         </label>
       )}
+      <label className="check">
+        <input type="checkbox" checked={practice} onChange={(e) => setPractice(e.target.checked)} aria-describedby="assign-practice-hint" />
+        <span>Practice</span>
+      </label>
+      <p className="hint" id="assign-practice-hint" style={{ margin: 0 }}>
+        A question answered wrong comes back at the end, up to 2 more times. The score counts first tries only.
+      </p>
       {error && <div className="alert alert-danger" role="alert">{error}</div>}
       <div className="row">
         <button type="submit" className="btn btn-secondary" disabled={busy}>{busy ? "Assigning…" : "Assign"}</button>

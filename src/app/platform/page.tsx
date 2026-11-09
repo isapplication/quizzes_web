@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { AiCeilings } from "@/components/AiCeilings";
 import { AiConsole } from "@/components/AiConsole";
 import { EmailConsole } from "@/components/EmailConsole";
 import { LibraryConsole } from "@/components/LibraryConsole";
@@ -95,7 +96,12 @@ function PlatformConsole() {
       {tab === "workspaces" && <Workspaces plans={plans} onError={setError} onNotice={setNotice} />}
       {tab === "sign-ups" && <SignUps onError={setError} />}
       {tab === "library" && <LibraryConsole onError={setError} onNotice={setNotice} />}
-      {tab === "ai" && <AiConsole onError={setError} />}
+      {tab === "ai" && (
+        <>
+          <AiCeilings onError={setError} onNotice={setNotice} />
+          <AiConsole onError={setError} />
+        </>
+      )}
       {tab === "emails" && <EmailConsole onError={setError} onNotice={setNotice} />}
       {tab === "settings" && <LocationSettings onError={setError} onNotice={setNotice} />}
     </div>

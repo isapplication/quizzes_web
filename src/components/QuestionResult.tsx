@@ -33,7 +33,9 @@ const withUnit = (n: number, unit?: string) => (unit ? num(n) + " " + unit : num
  * {@code people}: how many could have answered, for "x of y answered"; {@code who}: what they are called there
  * ("players" in a live game, "students" in an assignment).
  */
-export function QuestionResult({ q, people, who = "players" }: { q: ReportQuestion; people: number; who?: string }) {
+export function QuestionResult({ q, people, who = "players", note }: { q: ReportQuestion; people: number; who?: string;
+  /** A line under the results, e.g. a practice assignment's first tries and "right by the third try". */
+  note?: string }) {
   const type = (q.type ?? "QUIZ") as QType;
   const counted = q.counted !== false;
   const right = q.correctIndexes ?? (q.correctIndex >= 0 ? [q.correctIndex] : []);
@@ -138,6 +140,7 @@ export function QuestionResult({ q, people, who = "players" }: { q: ReportQuesti
       )}
 
       <div className="muted">{q.answered} of {people} {who} answered</div>
+      {note && <p className="hint" style={{ margin: 0 }}>{note}</p>}
     </li>
   );
 }

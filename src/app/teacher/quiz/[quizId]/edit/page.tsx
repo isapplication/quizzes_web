@@ -222,7 +222,7 @@ function Editor() {
             <QuestionForm key={selected} index={selected} q={q} total={questions.length} problem={notReady[selected]}
                           onChange={(patch) => update(selected, patch)} onType={(t) => setQuestionsAndSave(questions.map((x, k) => (k === selected ? changeType(x, t) : x)))}
                           onMove={(by) => move(selected, by)}
-                          onCopy={() => copy(selected)} onRemove={() => remove(selected)} />
+                          onCopy={() => copy(selected)} onRemove={() => remove(selected)} subject={quiz.subject} />
           )}
         </section>
       </div>

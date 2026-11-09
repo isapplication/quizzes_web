@@ -58,7 +58,7 @@ function Results() {
       <PageHeader title={a.title}
                   description={<>{a.classCode ? "Class " + a.classCode : "Anyone with the link"}
                     {a.requireSignIn && " · signed-in students only"}{a.dueAt && <> · {dueText(a.dueAt)}</>}
-                    {" · "}{a.open ? "Open" : "Closed"}</>}
+                    {" · "}{a.open ? "Open" : "Closed"}{a.practice && " · practice"}</>}
                   action={a.open ? <button type="button" className="btn btn-light" onClick={close}>Close it</button> : undefined} />
       {error && <div className="alert alert-danger" role="alert">{error}</div>}
       <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
@@ -78,13 +78,15 @@ function Results() {
         <div className="table-scroll" tabIndex={0} role="region" aria-labelledby="attempts-caption">
           <table className="sticky-head">
             <caption id="attempts-caption" className="sr-only">Students and their scores</caption>
-            <thead><tr><th>Name</th><th>Score</th><th>Right</th><th>Answered</th><th>Finished</th></tr></thead>
+            <thead><tr><th>Name</th><th>Score</th><th>Right{a.practice && " (first try)"}</th>
+              {a.practice && <th>Right by the third try</th>}<th>Answered</th><th>Finished</th></tr></thead>
             <tbody>
               {results.attempts.map((t, i) => (
                 <tr key={i}>
                   <td>{t.name} {t.guest && <span className="chip">Guest</span>}</td>
                   <td>{t.score}</td>
                   <td>{rightText(t) ?? <span className="muted">Nothing to mark</span>}</td>
+                  {a.practice && <td>{t.rightInTheEnd ?? t.correct}{t.scored ? " of " + t.scored : ""}</td>}
                   <td>{t.answered} of {t.questions}</td>
                   <td>{t.finishedAt ? new Date(t.finishedAt).toLocaleString() : <span className="muted">Not yet</span>}</td>
                 </tr>
@@ -97,7 +99,10 @@ function Results() {
       <h2>Questions</h2>
       <ol className="question-list">
         {results.questions.map((q) => (
-          <QuestionResult key={q.number} q={q} people={results.attempts.length} who="students" />
+          <QuestionResult key={q.number} q={q} people={results.attempts.length} who="students"
+                          note={a.practice && q.counted !== false
+                            ? "First tries: " + q.correct + " of " + q.answered + " right · right by the third try: " + (q.rightInTheEnd ?? q.correct)
+                            : undefined} />
         ))}
       </ol>
     </div>

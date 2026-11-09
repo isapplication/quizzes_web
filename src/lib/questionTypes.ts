@@ -58,6 +58,8 @@ export const LIMITS = {
   categoryLabel: 30,
   minCatItems: 2,
   maxCatItems: 16,
+  /** A worked solution, step by step (Wave 3, W51). */
+  solution: 1000,
   catItem: 40,
 } as const;
 
@@ -96,8 +98,18 @@ export interface EditorQuestion {
   correctIndexes: number[];
   payload: EditorPayload;
   explanation: string | null;
+  /** A worked solution, step by step, shown to players only after they answer (Math and Science); null for none. */
+  solution?: string | null;
   /** Read only: what the server sent before 1b; never relied on after {@link fromServer}. */
   correctIndex?: number;
+}
+
+/** The subjects whose questions get a worked solution (W51). */
+export const SOLUTION_SUBJECTS = ["Math", "Science"];
+
+/** Whether the editor offers a worked solution: for scored questions of Math and Science, or one that already has one. */
+export function offersSolution(q: { type: QType; solution?: string | null }, subject: string | undefined): boolean {
+  return scored(q.type) && (SOLUTION_SUBJECTS.includes(subject ?? "") || !!q.solution);
 }
 
 export const CHOICE_TYPES: QType[] = ["QUIZ", "MULTI_SELECT", "POLL"];
@@ -185,6 +197,7 @@ export function fromServer(raw: Record<string, unknown>): EditorQuestion {
     correctIndexes: type === "POLL" || type === "PUZZLE" || type === "CATEGORISE" ? [] : correctIndexes,
     payload,
     explanation: typeof raw.explanation === "string" ? raw.explanation : null,
+    solution: typeof raw.solution === "string" && raw.solution.trim() ? raw.solution : null,
   };
 }
 
@@ -194,7 +207,8 @@ export function fromServer(raw: Record<string, unknown>): EditorQuestion {
  */
 export function changeType(q: EditorQuestion, type: QType): EditorQuestion {
   if (q.type === type) return q;
-  const next = { ...blank(type), text: q.text, explanation: q.explanation, points: q.points };
+  const next: EditorQuestion = { ...blank(type), text: q.text, explanation: q.explanation, points: q.points,
+    solution: scored(type) ? q.solution ?? null : null };
   if (CHOICE_TYPES.includes(q.type) && CHOICE_TYPES.includes(type)) {
     next.choices = [...q.choices];
     next.correctIndexes = type === "POLL" ? [] : type === "QUIZ" ? q.correctIndexes.slice(0, 1) : [...q.correctIndexes];
@@ -266,6 +280,7 @@ export function toServer(q: EditorQuestion) {
     correctIndex: q.type === "QUIZ" || q.type === "TRUE_FALSE" ? correctIndexes[0] ?? -1 : -1,
     payload,
     explanation: q.explanation,
+    solution: scored(q.type) && q.solution && q.solution.trim() ? q.solution.trim() : null,
   };
 }
 
