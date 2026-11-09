@@ -219,7 +219,7 @@ function Editor() {
               <p className="muted">Choose a question type under &quot;Add a question&quot; to start.</p>
             </div>
           ) : (
-            <QuestionForm key={selected} index={selected} q={q} total={questions.length} problem={notReady[selected]}
+            <QuestionForm key={selected} index={selected} q={q} total={questions.length} problem={notReady[selected]} grade={quiz.grade} subject={quiz.subject}
                           onChange={(patch) => update(selected, patch)} onType={(t) => setQuestionsAndSave(questions.map((x, k) => (k === selected ? changeType(x, t) : x)))}
                           onMove={(by) => move(selected, by)}
                           onCopy={() => copy(selected)} onRemove={() => remove(selected)} />

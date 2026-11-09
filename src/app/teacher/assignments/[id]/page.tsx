@@ -7,6 +7,8 @@ import { QuestionResult } from "@/components/QuestionResult";
 import { api, ApiError } from "@/lib/api";
 import { AssignmentResults, AssignmentSummary, dueText, rightText } from "@/lib/assignments";
 import { EmptyState, ErrorState, LoadingState, PageHeader } from "@/components/ui/States";
+import { ReportActions } from "@/components/ReportActions";
+import { hardQuestions } from "@/lib/reports";
 
 export default function AssignmentResultsRoute() {
   return (
@@ -61,6 +63,11 @@ function Results() {
                     {" · "}{a.open ? "Open" : "Closed"}</>}
                   action={a.open ? <button type="button" className="btn btn-light" onClick={close}>Close it</button> : undefined} />
       {error && <div className="alert alert-danger" role="alert">{error}</div>}
+      {results.attempts.length > 0 && (
+        <ReportActions filePath={{ csv: "/api/v1/assignments/" + id + "/results.csv", xlsx: "/api/v1/assignments/" + id + "/results.xlsx" }}
+                       fileName={a.title} reteachPath={"/api/v1/assignments/" + id + "/reteach"}
+                       hard={hardQuestions(results.questions).length} onError={setError} />
+      )}
       <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
         <input type="text" readOnly value={a.link} aria-label="Assignment link" style={{ flex: "1 1 260px", minWidth: 0 }}
                onFocus={(e) => e.target.select()} />

@@ -6,7 +6,8 @@ import { AppFrame } from "@/components/AppFrame";
 import { QuestionResult, type ReportQuestion } from "@/components/QuestionResult";
 import { GAME_MODES, TeamBadge } from "@/components/Stage";
 import { api, ApiError } from "@/lib/api";
-import { tabKey } from "@/lib/tab";
+import { ReportActions } from "@/components/ReportActions";
+import { hardQuestions } from "@/lib/reports";
 import { EmptyState, LoadingState, PageHeader } from "@/components/ui/States";
 
 interface Report {
@@ -48,24 +49,6 @@ function GameReport() {
       .catch((e: unknown) => setError(e instanceof ApiError ? e.message : "Quizplayo could not load this report."));
   }, [gameId]);
 
-  /** The CSV goes through api()'s tab key, so it downloads as this tab's person. */
-  async function download() {
-    const key = tabKey();
-    const r = await fetch("/api/v1/live/games/" + gameId + "/report.csv", {
-      headers: key ? { Authorization: "Bearer " + key } : undefined, credentials: "same-origin",
-    });
-    if (!r.ok) {
-      setError("Quizplayo could not prepare the file. Please try again.");
-      return;
-    }
-    const url = URL.createObjectURL(await r.blob());
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = (report?.quizTitle ?? "game").replace(/[^\w -]+/g, "").trim() + " results.csv";
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
   if (error && !report) return <div className="alert alert-danger">{error}</div>;
   if (!report) return <LoadingState rows={6} label="Loading the report" />;
   const s = report.summary;
@@ -78,7 +61,9 @@ function GameReport() {
                     {" · "}{report.requireSignIn ? "Signed-in students" + (report.classCode ? " of " + report.classCode : "") : "Anyone with the PIN"}
                     {" · "}{GAME_MODES.find((m) => m.value === report.mode)?.label ?? "Classic"} game</>}
                   action={finished && report.players.length > 0
-                    ? <button type="button" className="btn btn-light" onClick={download}>Download CSV</button> : undefined} />
+                    ? <ReportActions filePath={{ csv: "/api/v1/live/games/" + gameId + "/report.csv", xlsx: "/api/v1/live/games/" + gameId + "/report.xlsx" }}
+                                     fileName={report.quizTitle} reteachPath={"/api/v1/live/games/" + gameId + "/reteach"}
+                                     hard={hardQuestions(report.questions).length} onError={setError} /> : undefined} />
       {error && <div className="alert alert-danger">{error}</div>}
       {!finished && (
         <EmptyState title="This game hasn't finished yet">The report appears when the game reaches the podium.</EmptyState>

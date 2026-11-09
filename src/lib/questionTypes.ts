@@ -96,6 +96,8 @@ export interface EditorQuestion {
   correctIndexes: number[];
   payload: EditorPayload;
   explanation: string | null;
+  /** The standard code the question covers (W63), in capitals; empty when none. */
+  standard?: string | null;
   /** Read only: what the server sent before 1b; never relied on after {@link fromServer}. */
   correctIndex?: number;
 }
@@ -185,6 +187,7 @@ export function fromServer(raw: Record<string, unknown>): EditorQuestion {
     correctIndexes: type === "POLL" || type === "PUZZLE" || type === "CATEGORISE" ? [] : correctIndexes,
     payload,
     explanation: typeof raw.explanation === "string" ? raw.explanation : null,
+    standard: typeof raw.standard === "string" && raw.standard ? raw.standard : null,
   };
 }
 
@@ -194,7 +197,7 @@ export function fromServer(raw: Record<string, unknown>): EditorQuestion {
  */
 export function changeType(q: EditorQuestion, type: QType): EditorQuestion {
   if (q.type === type) return q;
-  const next = { ...blank(type), text: q.text, explanation: q.explanation, points: q.points };
+  const next = { ...blank(type), text: q.text, explanation: q.explanation, points: q.points, standard: q.standard ?? null };
   if (CHOICE_TYPES.includes(q.type) && CHOICE_TYPES.includes(type)) {
     next.choices = [...q.choices];
     next.correctIndexes = type === "POLL" ? [] : type === "QUIZ" ? q.correctIndexes.slice(0, 1) : [...q.correctIndexes];
@@ -266,6 +269,7 @@ export function toServer(q: EditorQuestion) {
     correctIndex: q.type === "QUIZ" || q.type === "TRUE_FALSE" ? correctIndexes[0] ?? -1 : -1,
     payload,
     explanation: q.explanation,
+    standard: standardCode(q.standard),
   };
 }
 
@@ -482,4 +486,19 @@ export function outcomeOf(r: { answered: boolean; correct: boolean; fraction?: n
   if (r.correct) return "correct";
   const fraction = r.fraction ?? 0;
   return fraction > 0 ? "partial" : "wrong";
+}
+
+/** The longest standard code the API takes (W63). */
+export const STANDARD_MAX = 30;
+
+/** A standard code as it is sent: trimmed, in capitals, null when empty. The API refuses anything but letters, digits, dots and dashes. */
+export function standardCode(raw: string | null | undefined): string | null {
+  const code = (raw ?? "").trim().toUpperCase();
+  return code === "" ? null : code;
+}
+
+/** True when a code is empty or 2 to 30 letters, digits, dots and dashes (what the API accepts). */
+export function standardOk(raw: string | null | undefined): boolean {
+  const code = standardCode(raw);
+  return code === null || /^[A-Z0-9][A-Z0-9.-]{1,29}$/.test(code);
 }

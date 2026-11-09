@@ -916,3 +916,28 @@ input[type=email], input[type=tel], input[type=password], input[type=search] {
 .template-card p { margin: 0 0 6px; font-size: 13px; }
 .grade-badge { display: inline-flex; align-items: center; cursor: help; margin-left: 4px; }
 .grade-badge-icon { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; background: var(--warn, #e8a735); color: #fff; font-size: 12px; font-weight: 700; }
+
+/* Reports over time (wave 3, 3b) */
+.report-filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.report-filters .field { min-width: 140px; }
+.report-filters select, .report-filters input[type=date] { min-block-size: 40px; }
+.trend { display: block; max-inline-size: 100%; block-size: auto; }
+.trend-line { fill: none; stroke: var(--pc); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.trend-line-help { stroke: var(--border); stroke-width: 1; }
+.trend-end { fill: var(--pc); stroke: var(--card); stroke-width: 2; }
+.trend-hit { fill: transparent; }
+.tabs button { background: transparent; border: 0; border-bottom: 3px solid transparent; padding: 10px 14px; font: inherit; cursor: pointer; color: var(--muted); }
+.tabs button:focus-visible { outline: 3px solid var(--pc); outline-offset: -3px; }
+.table-scroll tbody th[scope=row] { text-align: start; font-weight: 600; background: var(--card); }
+.standard-row summary { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; cursor: pointer; }
+.standard-questions { margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.standard-questions li { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.progress-card { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-end; }
+.progress-card > div { display: grid; gap: 4px; }
+.progress-number { font-size: 28px; color: var(--sc); }
+.field input[type=date] { width: 100%; }
+.standard-input { max-inline-size: 260px; }
+@media (max-width: 480px) {
+  .report-filters .field { flex: 1 1 140px; }
+  .tabs button { padding: 10px 10px; font-size: 14px; }
+}

@@ -36,6 +36,8 @@ export interface QuestionView {
   visual: string | null;
   answer: Record<string, unknown>;
   playableLive: boolean;
+  /** The standard code the question covers, or null. */
+  standard?: string | null;
 }
 
 export interface QuizView {
