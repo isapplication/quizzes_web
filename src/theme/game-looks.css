@@ -491,3 +491,48 @@
   .gl-tile, .gl-card, .gl-btn, .gl-chip, .gl-board li { border: 2px solid CanvasText; }
   .gl-tile.is-dim { opacity: 0.5; }
 }
+
+/* Wave 2c: Confidence boosts on the player's device. The sign and the word carry the result, never colour alone. */
+.gl-boost { border: 0; margin: 0; padding: 16px; display: grid; gap: 10px; justify-items: center; width: 100%; max-width: 520px; }
+.gl-boost legend { padding: 0; font-weight: 700; }
+.gl-boost-rule { margin: 0; text-align: center; }
+.gl-boost .gl-btn { min-inline-size: 88px; }
+.gl-boost-result { font-weight: 800; font-variant-numeric: tabular-nums; }
+.gl-boost-result.won::before { content: "▲ "; }
+.gl-boost-result.lost::before { content: "▼ "; }
+
+/* Wave 2d: team talk, the team lobby and the shared-device join form. */
+.gl-talk { display: flex; align-items: center; gap: 14px; padding: 12px 18px; width: 100%; }
+.gl-talk-n { font-family: var(--font-display); font-weight: 800; font-size: 34px; font-variant-numeric: tabular-nums; }
+.gl-team-lobby { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); }
+.gl-team-col { padding: 12px 14px; display: grid; gap: 8px; align-content: start; }
+.gl-team-col h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 18px; }
+.gl-team-col ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.gl-team-col li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-block-size: 32px; }
+.gl-team-col li.away { opacity: 0.55; }
+.gl-team-col li .nm { font-weight: 700; flex: 1 1 auto; }
+.gl-team-col select { min-block-size: 32px; max-inline-size: 100%; }
+.gl-team-pick { border: 0; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.gl-team-pick legend { font-weight: 700; margin-bottom: 6px; }
+.gl-team-option { display: inline-flex; align-items: center; gap: 6px; min-block-size: 40px; padding: 4px 8px; border-radius: 12px; border: 2px solid transparent; cursor: pointer; }
+.gl-team-option.is-chosen { border-color: currentColor; }
+.gl-team-option.is-chosen .team-badge::after { content: " ✓"; }
+
+/* Wave 2e: scale, word cloud and open-ended. */
+.scale-points { border: 0; margin: 0; padding: 0; display: grid; gap: 8px; }
+.scale-points legend { font-weight: 700; margin-bottom: 6px; }
+.scale-row { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.scale-point { position: relative; display: grid; place-items: center; min-inline-size: 44px; min-block-size: 44px; border-radius: 12px; border: 2px solid var(--line); background: var(--card-bg); font-weight: 800; font-variant-numeric: tabular-nums; cursor: pointer; }
+.scale-point input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.scale-point:has(input:focus-visible) { outline: 3px solid var(--pc); outline-offset: 2px; }
+.scale-point.is-chosen { background: var(--pc); color: var(--pc-ink); border-color: var(--pc); }
+.scale-ends { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }
+.gl-cloud { display: flex; flex-wrap: wrap; gap: 6px 14px; justify-content: center; align-items: baseline; padding: 16px; }
+.gl-cloud li { list-style: none; display: inline-flex; align-items: center; gap: 4px; font-family: var(--font-display); font-weight: 800; line-height: 1.1; font-size: calc(16px + var(--w) * 40px); overflow-wrap: anywhere; }
+.gl-cloud li:nth-child(6n+1) { color: var(--a1); } .gl-cloud li:nth-child(6n+2) { color: var(--a2); }
+.gl-cloud li:nth-child(6n+3) { color: var(--a3); } .gl-cloud li:nth-child(6n+4) { color: var(--a4); }
+.gl-wall { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); list-style: none; margin: 0; padding: 0; }
+.gl-wall li { background: var(--card-bg); color: var(--card-ink); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; display: grid; gap: 6px; overflow-wrap: anywhere; }
+.gl-hide { justify-self: end; font-size: 13px; }
+.gl-moderate { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; justify-content: center; }
+@media (forced-colors: active) { .scale-point.is-chosen { border: 3px solid Highlight; } .gl-wall li { border: 1px solid CanvasText; } }

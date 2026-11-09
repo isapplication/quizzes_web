@@ -78,3 +78,15 @@ export function JoinHero({ brand, title, subtitle }: { brand?: ShownBrand | null
     </div>
   );
 }
+/** Team talk: the question shows, answers open when this runs out. */
+export function TalkCountdown({ until, serverNow, host = false }: { until: number; serverNow: () => number; host?: boolean }) {
+  const left = useCountdown(until, serverNow);
+  if (left <= 0) return null;
+  return (
+    <div className="gl-card gl-talk" role="status">
+      <span className="gl-talk-n" aria-hidden="true">{left}</span>
+      <span>{host ? "Teams are talking it over. Answers open in " + left + " s." : "Talk with your team. Answers open in " + left + " s."}</span>
+    </div>
+  );
+}
+

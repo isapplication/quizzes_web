@@ -223,3 +223,163 @@ export function CategoriseForm({ data, onSubmit, busy = false, variant }: {
     </form>
   );
 }
+
+/** Wave 2e: a scale's ends and labels, as the game server sends them in {@code scale}. */
+export interface ScaleShown {
+  min: number;
+  max: number;
+  lowLabel?: string;
+  highLabel?: string;
+}
+
+/**
+ * Scale (W14): a row of numbered buttons in a radio group (arrow keys move, Space picks), with the end labels, then
+ * Submit. Radios rather than toggle buttons, so a screen reader says "3 of 5".
+ */
+export function ScaleForm({ scale, onSubmit, busy = false, variant }: {
+  scale: ScaleShown;
+  onSubmit: (value: number) => void;
+  busy?: boolean;
+  variant: Variant;
+}) {
+  const id = useId();
+  const [value, setValue] = useState<number | null>(null);
+  const points = Array.from({ length: scale.max - scale.min + 1 }, (_, i) => scale.min + i);
+  return (
+    <form className={variant === "game" ? "gl-form gl-card gl-scale-form" : "activity-panel stack scale-form"}
+          onSubmit={(e) => { e.preventDefault(); if (value !== null) onSubmit(value); }}>
+      <fieldset className="scale-points" aria-describedby={id + "-ends"}>
+        <legend>Your rating</legend>
+        <div className="scale-row">
+          {points.map((n) => (
+            <label key={n} className={"scale-point" + (value === n ? " is-chosen" : "")}>
+              <input type="radio" name={id + "-scale"} value={n} checked={value === n} disabled={busy}
+                     onChange={() => setValue(n)} />
+              <span>{n}</span>
+            </label>
+          ))}
+        </div>
+        <div id={id + "-ends"} className="scale-ends">
+          <span>{scale.min}: {scale.lowLabel}</span>
+          <span>{scale.max}: {scale.highLabel}</span>
+        </div>
+      </fieldset>
+      <button type="submit" className={submitClass(variant)} disabled={busy || value === null}>
+        {busy ? "Sending…" : value === null ? "Pick a number" : "Submit " + value}
+      </button>
+    </form>
+  );
+}
+
+/**
+ * Word cloud (one line, up to 20 characters) or open-ended (a text area, up to 250): a live character count, then
+ * Submit. {@code error}: the server's reason for refusing the last try ("That word isn't allowed. Try another."), shown
+ * under the box and tied to it, so the player can change it and send again.
+ */
+export function FreeTextForm({ long, max, onSubmit, busy = false, variant, error = null, initial = "" }: {
+  long: boolean;
+  max: number;
+  onSubmit: (text: string) => void;
+  busy?: boolean;
+  variant: Variant;
+  error?: string | null;
+  /** What the player sent last time, when it was refused, so they change it rather than type it again. */
+  initial?: string;
+}) {
+  const id = useId();
+  const [text, setText] = useState(initial);
+  const used = [...text.trim()].length;
+  const ready = used > 0 && used <= max;
+  const describedBy = id + "-hint" + (error ? " " + id + "-error" : "");
+  return (
+    <form className={variant === "game" ? "gl-form gl-card gl-answer-form" : "activity-panel stack"}
+          onSubmit={(e) => { e.preventDefault(); if (ready) onSubmit(text.trim()); }}>
+      <div className={variant === "game" ? "gl-field" : "field"}>
+        <label htmlFor={id + "-in"}>{long ? "Your answer" : "Your word"}</label>
+        {long ? (
+          <textarea id={id + "-in"} rows={4} value={text} maxLength={max} disabled={busy} aria-describedby={describedBy}
+                    aria-invalid={error ? true : undefined} onChange={(e) => setText(e.target.value)} />
+        ) : (
+          <input id={id + "-in"} type="text" value={text} maxLength={max} autoComplete="off" enterKeyHint="send"
+                 disabled={busy} aria-describedby={describedBy} aria-invalid={error ? true : undefined}
+                 onChange={(e) => setText(e.target.value)} className="typed-answer" />
+        )}
+        <span id={id + "-hint"} className="hint">{used} of {max} characters. The teacher chooses what the class sees.</span>
+        {error && <span id={id + "-error"} className="hint hint-danger" role="alert">{error}</span>}
+      </div>
+      <button type="submit" className={submitClass(variant)} disabled={busy || !ready}>{busy ? "Sending…" : "Send"}</button>
+    </form>
+  );
+}
+
+/**
+ * Brainstorm ideas round (W31): up to three boxes of up to 40 characters each, sent together. {@code error}: the
+ * server's reason for refusing the last try (a rude word, too long), tied to the boxes.
+ */
+export function IdeasForm({ onSubmit, busy = false, variant, error = null, initial = [], max = 3, maxLength = 40 }: {
+  onSubmit: (ideas: string[]) => void;
+  busy?: boolean;
+  variant: Variant;
+  error?: string | null;
+  initial?: string[];
+  max?: number;
+  maxLength?: number;
+}) {
+  const id = useId();
+  const [ideas, setIdeas] = useState<string[]>(() => Array.from({ length: max }, (_, i) => initial[i] ?? ""));
+  const filled = ideas.map((t) => t.trim()).filter(Boolean);
+  return (
+    <form className={variant === "game" ? "gl-form gl-card gl-answer-form" : "activity-panel stack"}
+          onSubmit={(e) => { e.preventDefault(); if (filled.length) onSubmit(filled); }}>
+      <fieldset className={variant === "game" ? "gl-field" : "field"} style={{ border: 0, padding: 0, margin: 0 }}
+                aria-describedby={id + "-hint" + (error ? " " + id + "-error" : "")}>
+        <legend>Your ideas</legend>
+        {ideas.map((t, i) => (
+          <input key={i} type="text" value={t} maxLength={maxLength} autoComplete="off" disabled={busy}
+                 aria-label={"Idea " + (i + 1) + (i === 0 ? "" : " (optional)")} aria-invalid={error ? true : undefined}
+                 onChange={(e) => setIdeas(ideas.map((old, k) => (k === i ? e.target.value : old)))} />
+        ))}
+        <span id={id + "-hint"} className="hint">1 to {max} ideas, up to {maxLength} characters each. Your teacher chooses what shows.</span>
+        {error && <span id={id + "-error"} className="hint hint-danger" role="alert">{error}</span>}
+      </fieldset>
+      <button type="submit" className={submitClass(variant)} disabled={busy || filled.length === 0}>
+        {busy ? "Sending…" : filled.length > 1 ? `Send ${filled.length} ideas` : "Send my idea"}
+      </button>
+    </form>
+  );
+}
+
+/** Brainstorm votes round: a checkbox per idea, up to three; your own ideas are marked and can't be picked. */
+export function VotesForm({ ideas, max = 3, onSubmit, busy = false, variant }: {
+  ideas: { id: string; text: string; mine?: boolean }[];
+  max?: number;
+  onSubmit: (ids: string[]) => void;
+  busy?: boolean;
+  variant: Variant;
+}) {
+  const id = useId();
+  const [picked, setPicked] = useState<string[]>([]);
+  return (
+    <form className={variant === "game" ? "gl-form gl-card gl-answer-form" : "activity-panel stack"}
+          onSubmit={(e) => { e.preventDefault(); if (picked.length) onSubmit(picked); }}>
+      <fieldset style={{ border: 0, padding: 0, margin: 0 }} aria-describedby={id + "-hint"}>
+        <legend>Vote for the best ideas</legend>
+        <span id={id + "-hint"} className="hint">Pick up to {max}. {picked.length} picked.</span>
+        <ul className="vote-list">
+          {ideas.map((idea) => (
+            <li key={idea.id}>
+              <label className="check">
+                <input type="checkbox" checked={picked.includes(idea.id)} disabled={busy || idea.mine || (!picked.includes(idea.id) && picked.length >= max)}
+                       onChange={(e) => setPicked(e.target.checked ? [...picked, idea.id] : picked.filter((p) => p !== idea.id))} />
+                <span>{idea.text}{idea.mine && <span className="muted"> (your idea)</span>}</span>
+              </label>
+            </li>
+          ))}
+        </ul>
+      </fieldset>
+      <button type="submit" className={submitClass(variant)} disabled={busy || picked.length === 0}>
+        {busy ? "Sending…" : "Send my votes"}
+      </button>
+    </form>
+  );
+}

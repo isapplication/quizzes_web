@@ -40,7 +40,13 @@ interface JoinInfo {
   lookGrade: number | null;
   /** A guest must also tap the four-shape pattern from the classroom screen. */
   roomCheck?: boolean;
+  /** Wave 2d: SHARED when each device plays as one team, picked from {@code teams}, with up to 5 first names. */
+  teamDevices?: "EACH" | "SHARED" | null;
+  teams?: string[] | null;
 }
+
+/** The most people who can share one device in a team game. */
+const MAX_MEMBERS = 5;
 
 /** A refreshed tab goes back into its game (the ticket lasts the lesson); one game per tab. */
 const SAVED = "quizplayo.play";
@@ -87,6 +93,8 @@ function Play() {
   const [busy, setBusy] = useState(false);
   const [backUrl, setBackUrl] = useState<string | null>(null);
   const [pattern, setPattern] = useState<number[]>([]);
+  const [team, setTeam] = useState<number | null>(null);
+  const [members, setMembers] = useState<string[]>(["", ""]);
   const autoJoined = useRef(false);
   // The join page takes the hosting school's colours as soon as the PIN is known.
   useOwnerBrand(info?.brand);
@@ -121,7 +129,9 @@ function Play() {
     setError(null);
     try {
       const j = await api<Joined>("/api/v1/live/join", {
-        method: "POST", body: { pin: info.pin, nickname, pattern: info.roomCheck ? pattern : null },
+        method: "POST", body: { pin: info.pin, nickname, pattern: info.roomCheck ? pattern : null,
+          team: info.teamDevices === "SHARED" ? team : null,
+          members: info.teamDevices === "SHARED" ? members.map((m) => m.trim()).filter(Boolean) : null },
       });
       save(j);
       setJoined(j);
@@ -197,7 +207,39 @@ function Play() {
                   </p>
                 </div>
               )}
-              {info.joinAs === "GUEST" && (
+              {info.teamDevices === "SHARED" && info.teams && (
+                <form className="gl-card gl-join-card gl-form" onSubmit={(e) => { e.preventDefault(); join(); }}>
+                  <fieldset className="gl-field gl-team-pick">
+                    <legend>Your team</legend>
+                    {info.teams.map((name, i) => (
+                      <label key={i} className={"gl-team-option" + (team === i + 1 ? " is-chosen" : "")}>
+                        <input type="radio" name="team" checked={team === i + 1}
+                               onChange={() => { setTeam(i + 1); setError(null); }} />
+                        <span className={"team-badge team-" + (i + 1)}>{name}</span>
+                      </label>
+                    ))}
+                  </fieldset>
+                  <fieldset className="gl-field">
+                    <legend>Who is playing on this device?</legend>
+                    <span id="members-hint" className="hint">First names only, up to {MAX_MEMBERS}. Only your teacher sees them.</span>
+                    {members.map((m, i) => (
+                      <input key={i} type="text" value={m} maxLength={20} autoComplete="off" aria-describedby="members-hint"
+                             aria-label={"First name " + (i + 1)}
+                             onChange={(e) => { const next = [...members]; next[i] = e.target.value; setMembers(next); setError(null); }} />
+                    ))}
+                    {members.length < MAX_MEMBERS && (
+                      <button type="button" className="gl-quiet" onClick={() => setMembers([...members, ""])}>Add a name</button>
+                    )}
+                  </fieldset>
+                  {info.roomCheck && <PatternPad value={pattern} onChange={(update) => { setPattern(update); setError(null); }} />}
+                  <button className="gl-btn gl-btn-big" type="submit"
+                          disabled={busy || team === null || !members.some((m) => m.trim().length >= 2)
+                            || (!!info.roomCheck && pattern.length < 4)}>
+                    {busy ? "Joining…" : "Join as this team"}
+                  </button>
+                </form>
+              )}
+              {info.joinAs === "GUEST" && info.teamDevices !== "SHARED" && (
                 <form className="gl-card gl-join-card gl-form" onSubmit={(e) => { e.preventDefault(); join(); }}>
                   <div className="gl-field">
                     <label htmlFor="nickname">Your nickname</label>

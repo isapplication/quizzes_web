@@ -19,8 +19,16 @@ export interface ReportQuestion {
   percentCorrect: number;
   counted?: boolean;
   key?: AnswerKey;
+  /** An Unplugged game: the answer the teacher tapped for the class, in words. */
+  classAnswer?: string | null;
   stats?: { answered?: number; exactlyRight?: number; fullyRight?: number; mean?: number | null; min?: number | null;
-    max?: number | null; top?: { text: string; count: number }[]; knew?: number; catItemCorrect?: number[] };
+    max?: number | null; top?: { text: string; count: number }[]; knew?: number; catItemCorrect?: number[];
+    /** Wave 2e: a scale's count per point and NPS; a word cloud's words. */
+    counts?: number[]; nps?: number | null; words?: { text: string; count: number }[] };
+  /** Wave 2e: an open-ended question's answers with each player's name (teacher only). */
+  entries?: { name: string; text: string; votes?: number }[] | null;
+  /** A scale's labels, when the report sends them. */
+  scale?: { min: number; max: number } | null;
 }
 
 const CHOICE_REPORT_TYPES = ["QUIZ", "TRUE_FALSE", "MULTI_SELECT", "POLL"];
@@ -133,11 +141,68 @@ export function QuestionResult({ q, people, who = "players" }: { q: ReportQuesti
         </>
       )}
 
+      {type === "PIN_ANSWER" && (stats as { inside?: number }).inside != null && (
+        <div>{(stats as { inside?: number }).inside} of {answered} pinned inside the right area ({percent((stats as { inside?: number }).inside ?? 0, answered)}%)</div>
+      )}
+      {type === "DROP_PIN" && <div>{answered} {answered === 1 ? "pin" : "pins"} dropped</div>}
+
+      {type === "SCALE" && stats.counts && (
+        <>
+          {stats.mean != null && answered > 0 && (
+            <div>Average <strong>{num(stats.mean)}</strong>{stats.nps != null && <> · Net Promoter Score <strong>{stats.nps}</strong></>}</div>
+          )}
+          <ul className="report-answers" aria-label="Answers per point">
+            {stats.counts.map((c, i) => (
+              <li key={i} className="report-typed">
+                <span className="report-answer-text">{(typeof (q.key as Record<string, unknown> | undefined)?.min === "number"
+                  ? (q.key as Record<string, number>).min : stats.counts!.length === 11 ? 0 : 1) + i}</span>
+                <span className="report-bar" aria-hidden="true">
+                  <span style={{ width: (100 * c) / Math.max(1, ...stats.counts!) + "%", background: "var(--a1)" }} />
+                </span>
+                <span className="report-count">{c}</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      {type === "WORD_CLOUD" && stats.words && stats.words.length > 0 && (
+        <ul className="report-answers" aria-label="Words sent">
+          {stats.words.map((w) => (
+            <li key={w.text} className="report-typed">
+              <span className="report-answer-text">{w.text}</span>
+              <span className="report-bar" aria-hidden="true">
+                <span style={{ width: (100 * w.count) / Math.max(1, stats.words![0].count) + "%", background: "var(--a2)" }} />
+              </span>
+              <span className="report-count">{w.count}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {type === "BRAINSTORM" && (q.entries ?? []).length > 0 && (
+        <ol className="report-entries">
+          {q.entries!.map((e, i) => (
+            <li key={i}><strong>{e.text}</strong> · {e.votes ?? 0} {e.votes === 1 ? "vote" : "votes"}{e.name && <span className="muted"> · {e.name}</span>}</li>
+          ))}
+        </ol>
+      )}
+      {type === "BRAINSTORM" && !(q.entries ?? []).length && (stats as { ideas?: { text: string }[] }).ideas && (
+        <ul className="report-entries">{(stats as { ideas: { text: string }[] }).ideas.map((i, k) => <li key={k}>{i.text}</li>)}</ul>
+      )}
+      {type === "OPEN_ENDED" && (q.entries ?? []).length > 0 && (
+        <ul className="report-entries">
+          {q.entries!.map((e, i) => <li key={i}><strong>{e.name}:</strong> {e.text}</li>)}
+        </ul>
+      )}
+
       {(type as string) === "CARD" && stats.knew != null && (
         <div>{stats.knew} of {answered} knew this card ({percent(stats.knew, answered)}%)</div>
       )}
 
-      <div className="muted">{q.answered} of {people} {who} answered</div>
+      {q.classAnswer != null
+        ? <div>The class answered: <strong>{q.classAnswer}</strong></div>
+        : <div className="muted">{q.answered} of {people} {who} answered</div>}
     </li>
   );
 }

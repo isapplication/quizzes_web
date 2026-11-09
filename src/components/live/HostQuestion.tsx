@@ -2,7 +2,9 @@
 
 import type { CSSProperties } from "react";
 import { GameTile } from "@/components/Stage";
-import { type AnswerKey, formatNumber, keyText, normaliseTyped, percent, type Pick, pickOf, position } from "@/lib/questionTypes";
+import { type AnswerKey, formatNumber, keyText, normaliseTyped, percent, type PinArea, type Pick, pickOf, position,
+  type QuestionImage } from "@/lib/questionTypes";
+import { PinResults, QuestionImageView } from "@/components/ImageQuestion";
 
 /**
  * The classroom screen's view of one question, per type (Wave 1b): what players are answering while it is open, the
@@ -17,6 +19,12 @@ export interface HostQuestion {
   slider?: { min: number; max: number; step: number; unit?: string };
   categorise?: { categories: string[]; items: string[] };
   title?: string;
+  /** SCALE (Wave 2e). */
+  scale?: { min: number; max: number; lowLabel?: string; highLabel?: string };
+  maxLength?: number;
+  /** Wave 2h: the question's image and image reveal. */
+  image?: QuestionImage;
+  reveal?: boolean;
 }
 
 export interface HostStats {
@@ -27,6 +35,16 @@ export interface HostStats {
   max?: number;
   fullyRight?: number;
   exactlyRight?: number;
+  /** SCALE: a count per point from min to max; nps on a 0–10 scale. */
+  counts?: number[];
+  nps?: number | null;
+  /** WORD_CLOUD: words merged after normalising, most common first. */
+  words?: { text: string; count: number }[];
+  /** OPEN_ENDED: each shown answer with its id (for hiding). */
+  texts?: { id: string; text: string }[];
+  /** PIN_ANSWER: how many pinned inside; DROP_PIN: every pin. */
+  inside?: number;
+  points?: number[][];
 }
 
 export interface HostClosed {
@@ -38,6 +56,14 @@ export interface HostClosed {
   correctIndexes?: number[];
   key?: AnswerKey;
   stats?: HostStats;
+  /** Free text (W10): false until the teacher shows the answers on this screen. */
+  shown?: boolean;
+}
+
+/** The teacher's moderation of free-text answers (W10). */
+export interface Moderation {
+  onHide: (id: string) => void;
+  onShow: () => void;
 }
 
 const typeOf = (q: HostQuestion, c?: HostClosed) => c?.qtype ?? q.qtype ?? "QUIZ";
@@ -87,6 +113,31 @@ export function HostOpenAnswers({ question }: { question: HostQuestion }) {
       </div>
     );
   }
+  if (pick === "point" && question.image) {
+    return (
+      <div className="gl-card gl-host-panel gl-in">
+        <div className="gl-host-panel-big">{question.qtype === "DROP_PIN" ? "Drop your pin on the picture" : "Tap the right place on the picture"}</div>
+        <QuestionImageView image={question.image} />
+      </div>
+    );
+  }
+  if (pick === "scale" && question.scale) {
+    const sc = question.scale;
+    return (
+      <div className="gl-card gl-host-panel gl-in">
+        <div className="gl-host-panel-big">Pick a number from {sc.min} to {sc.max} on your device</div>
+        <div className="gl-scale-ends"><span>{sc.min}: {sc.lowLabel}</span><span>{sc.max}: {sc.highLabel}</span></div>
+      </div>
+    );
+  }
+  if (pick === "word" || pick === "long") {
+    return (
+      <div className="gl-card gl-host-panel gl-in">
+        <div className="gl-host-panel-big">{pick === "word" ? "Send one word or short phrase" : "Write your answer"} on your device</div>
+        <div>Up to {question.maxLength ?? (pick === "word" ? 20 : 250)} characters. Your teacher chooses what the class sees.</div>
+      </div>
+    );
+  }
   if (pick === "categorise" && question.categorise) {
     return (
       <div className="gl-card gl-host-panel gl-in">
@@ -108,7 +159,7 @@ export function HostOpenAnswers({ question }: { question: HostQuestion }) {
 }
 
 /** After the question closes: the results for its type. */
-export function HostResults({ question, closed }: { question: HostQuestion; closed: HostClosed }) {
+export function HostResults({ question, closed, moderation }: { question: HostQuestion; closed: HostClosed; moderation?: Moderation }) {
   const qtype = typeOf(question, closed);
   const correct = closed.correctIndexes ?? (closed.correctIndex >= 0 ? [closed.correctIndex] : []);
   const stats = closed.stats ?? {};
@@ -181,6 +232,45 @@ export function HostResults({ question, closed }: { question: HostQuestion; clos
     );
   }
 
+  if (qtype === "SCALE") {
+    const counts = stats.counts ?? [];
+    const min = question.scale?.min ?? 0;
+    const most = Math.max(1, ...counts);
+    return (
+      <div className="gl-card gl-host-panel gl-in">
+        <div className="gl-host-panel-big">
+          {stats.mean != null ? <>Average {stats.mean.toLocaleString(undefined, { maximumFractionDigits: 1 })}</> : "Nobody answered"}
+          {stats.nps != null && <> · Net Promoter Score {stats.nps}</>}
+        </div>
+        <ol className="gl-bars" aria-label="Answers per point">
+          {counts.map((c, i) => (
+            <li key={i}>
+              <span className="gl-bars-text">{min + i}</span>
+              <span className="gl-bars-bar" aria-hidden="true"><span style={{ width: percent(c, most) + "%" }} /></span>
+              <span className="gl-bars-count">{c}</span>
+            </li>
+          ))}
+        </ol>
+        {question.scale && <div className="gl-scale-ends"><span>{question.scale.min}: {question.scale.lowLabel}</span>
+          <span>{question.scale.max}: {question.scale.highLabel}</span></div>}
+      </div>
+    );
+  }
+
+  if ((qtype === "PIN_ANSWER" || qtype === "DROP_PIN") && question.image) {
+    return (
+      <div className="gl-card gl-host-panel gl-in">
+        <PinResults image={question.image} areas={(closed.key as { areas?: PinArea[] } | undefined)?.areas ?? []}
+                    points={stats.points ?? []} answered={stats.answered ?? 0}
+                    inside={qtype === "PIN_ANSWER" ? stats.inside ?? 0 : undefined} />
+      </div>
+    );
+  }
+
+  if (qtype === "WORD_CLOUD" || qtype === "OPEN_ENDED") {
+    return <FreeTextResults qtype={qtype} closed={closed} moderation={moderation} />;
+  }
+
   if (qtype === "CATEGORISE") {
     const answered = stats.answered ?? 0;
     const right = stats.fullyRight ?? 0;
@@ -206,6 +296,65 @@ export function HostResults({ question, closed }: { question: HostQuestion; clos
     );
   }
   return null;
+}
+
+/**
+ * Word cloud and open-ended results (W10): only the count until the teacher shows the answers; then the cloud (sized
+ * by count, with a table for screen readers) or a wall of answers, each with Hide.
+ */
+function FreeTextResults({ qtype, closed, moderation }: { qtype: string; closed: HostClosed; moderation?: Moderation }) {
+  const stats = closed.stats ?? {};
+  const answered = stats.answered ?? 0;
+  if (closed.shown === false) {
+    return (
+      <div className="gl-card gl-host-panel gl-in">
+        <div className="gl-host-panel-big">{answered} {answered === 1 ? "answer" : "answers"} in</div>
+        <p style={{ margin: 0 }}>The answers stay hidden until you show them. You can hide any answer afterwards.</p>
+        {moderation && answered > 0 && <button type="button" className="gl-btn gl-btn-big" onClick={moderation.onShow}>Show answers</button>}
+      </div>
+    );
+  }
+  if (qtype === "WORD_CLOUD") {
+    const words = stats.words ?? [];
+    const most = Math.max(1, ...words.map((w) => w.count));
+    return (
+      <div className="gl-card gl-host-panel gl-in">
+        <ul className="gl-cloud" aria-hidden="true">
+          {words.map((w) => <li key={w.text} style={{ "--w": w.count / most } as CSSProperties}>{w.text}</li>)}
+        </ul>
+        <table className="gl-cloud-table">
+          <caption className="sr-only">Every word and how many sent it</caption>
+          <thead className="sr-only"><tr><th scope="col">Word</th><th scope="col">Count</th>{moderation && <th scope="col">Hide</th>}</tr></thead>
+          <tbody>
+            {words.map((w) => (
+              <tr key={w.text}>
+                <td className="sr-only">{w.text}</td>
+                <td className="sr-only">{w.count}</td>
+                {moderation && <td><button type="button" className="gl-quiet gl-hide" onClick={() => moderation.onHide(w.text)}>
+                  Hide &ldquo;{w.text}&rdquo;</button></td>}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {words.length === 0 && <div>No answers to show.</div>}
+      </div>
+    );
+  }
+  const texts = stats.texts ?? [];
+  return (
+    <div className="gl-in stack">
+      <ul className="gl-wall">
+        {texts.map((t) => (
+          <li key={t.id}>
+            <span>{t.text}</span>
+            {moderation && <button type="button" className="gl-quiet gl-hide" aria-label={"Hide the answer: " + t.text}
+                                   onClick={() => moderation.onHide(t.id)}>Hide</button>}
+          </li>
+        ))}
+      </ul>
+      {texts.length === 0 && <div className="gl-card gl-host-panel">No answers to show.</div>}
+    </div>
+  );
 }
 
 /** The slider's spread: the scale, the right band (answer ± tolerance), the players' lowest to highest, and the mean. */

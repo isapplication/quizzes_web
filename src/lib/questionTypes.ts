@@ -4,12 +4,42 @@
  * normalising). The server decides every score; these helpers only shape what people see and send.
  */
 
-export type QType = "QUIZ" | "TRUE_FALSE" | "MULTI_SELECT" | "POLL" | "TYPE_ANSWER" | "SLIDER" | "PUZZLE" | "CATEGORISE" | "SLIDE";
+export type QType = "QUIZ" | "TRUE_FALSE" | "MULTI_SELECT" | "POLL" | "TYPE_ANSWER" | "SLIDER" | "PUZZLE" | "CATEGORISE" | "SLIDE"
+  | "SCALE" | "WORD_CLOUD" | "OPEN_ENDED" | "PIN_ANSWER" | "DROP_PIN" | "BRAINSTORM";
 
 /** How a player answers, as the game server says in a question's {@code pick}. */
-export type Pick = "one" | "many" | "text" | "number" | "order" | "categorise" | "none";
+export type Pick = "one" | "many" | "text" | "number" | "order" | "categorise" | "none" | "scale" | "word" | "long" | "point" | "ideas";
 
-export const QTYPES: QType[] = ["QUIZ", "TRUE_FALSE", "MULTI_SELECT", "POLL", "TYPE_ANSWER", "SLIDER", "PUZZLE", "CATEGORISE", "SLIDE"];
+export const QTYPES: QType[] = ["QUIZ", "TRUE_FALSE", "MULTI_SELECT", "POLL", "TYPE_ANSWER", "SLIDER", "PUZZLE", "CATEGORISE",
+  "SCALE", "WORD_CLOUD", "OPEN_ENDED", "PIN_ANSWER", "DROP_PIN", "BRAINSTORM", "SLIDE"];
+
+/** Wave 2h: answered on an image, which they need. */
+export const IMAGE_TYPES: QType[] = ["PIN_ANSWER", "DROP_PIN"];
+/** Wave 2h (W30): may uncover their image in five steps over the time limit. */
+export const REVEAL_TYPES: QType[] = ["QUIZ", "TYPE_ANSWER"];
+
+/**
+ * A question's image (Wave 2h). A stand-in until part 2f's uploads join it: an address (https, or a path on this
+ * site) and alt text (W21), with the picture's size so pins and circles keep its proportions.
+ */
+export interface QuestionImage {
+  url: string;
+  alt: string;
+  width?: number;
+  height?: number;
+}
+
+/** A pin-answer circle: the centre as a share of the image's width and height, the radius as a share of its width. */
+export interface PinArea {
+  x: number;
+  y: number;
+  r: number;
+}
+
+/** Wave 2e: the class's views, never scored (wave2-contract.md). */
+export const OPINION_TYPES: QType[] = ["POLL", "SCALE", "WORD_CLOUD", "OPEN_ENDED", "BRAINSTORM"];
+/** Free text that may reach the classroom screen: filtered, and shown only when the teacher says so (W10). */
+export const FREE_TEXT_TYPES: QType[] = ["WORD_CLOUD", "OPEN_ENDED"];
 
 export const QTYPE_LABEL: Record<QType, string> = {
   QUIZ: "Multiple choice",
@@ -21,6 +51,12 @@ export const QTYPE_LABEL: Record<QType, string> = {
   PUZZLE: "Puzzle",
   CATEGORISE: "Categorise",
   SLIDE: "Slide",
+  SCALE: "Scale",
+  WORD_CLOUD: "Word cloud",
+  OPEN_ENDED: "Open-ended",
+  PIN_ANSWER: "Pin answer",
+  DROP_PIN: "Drop pin",
+  BRAINSTORM: "Brainstorm",
 };
 
 /** One line for the type picker. */
@@ -34,6 +70,12 @@ export const QTYPE_HINT: Record<QType, string> = {
   PUZZLE: "Players put 3 to 6 items in the right order.",
   CATEGORISE: "Players sort items into 2 to 8 categories. Partial points.",
   SLIDE: "A screen of information between questions. No answers.",
+  SCALE: "Players rate from 0 or 1 up to 10. No points.",
+  WORD_CLOUD: "Players send one word or short phrase. Shown as a cloud when you're ready. No points.",
+  OPEN_ENDED: "Players write up to 250 characters. You choose what the class sees. No points.",
+  PIN_ANSWER: "Players tap the right place on an image. Right inside any of up to 3 circles.",
+  DROP_PIN: "Players drop a pin anywhere on an image; every pin shows afterwards. No points.",
+  BRAINSTORM: "Players send up to 3 ideas, then vote for others' ideas. The top 3 show. No points.",
 };
 
 export const LIMITS = {
@@ -59,6 +101,16 @@ export const LIMITS = {
   minCatItems: 2,
   maxCatItems: 16,
   catItem: 40,
+  scaleMax: 10,
+  scaleLabel: 30,
+  cloudWord: 20,
+  openText: 250,
+  alt: 120,
+  imageUrl: 1000,
+  maxAreas: 3,
+  idea: 40,
+  maxIdeas: 3,
+  maxVotes: 3,
 } as const;
 
 /** The slider's settings in the editor; a field is null while it isn't a number yet. */
@@ -84,6 +136,16 @@ export interface EditorPayload {
   categories?: string[];
   /** CATEGORISE: each item's text (items list) and its correct category index (assignments list). */
   catItems?: { text: string; category: number }[];
+  /** SCALE: the label at each end (min and max are above). */
+  lowLabel?: string;
+  highLabel?: string;
+  /** Wave 2h: the image (pin answer, drop pin; optional on quiz and type answer), circles, and reveal. */
+  image?: QuestionImage | null;
+  areas?: PinArea[];
+  reveal?: boolean;
+  /** Wave 2i: each brainstorm round's time in seconds. */
+  ideaSeconds?: number | null;
+  voteSeconds?: number | null;
 }
 
 /** One question in the editor. {@code correctIndexes} is empty until the teacher marks the right answer(s). */
@@ -103,8 +165,8 @@ export interface EditorQuestion {
 export const CHOICE_TYPES: QType[] = ["QUIZ", "MULTI_SELECT", "POLL"];
 export const isChoiceType = (t: QType) => CHOICE_TYPES.includes(t) || t === "TRUE_FALSE";
 
-/** Points are never given for a poll or a slide. */
-export const scored = (t: QType) => t !== "POLL" && t !== "SLIDE";
+/** Points are never given for a slide or an opinion question. */
+export const scored = (t: QType) => t !== "SLIDE" && t !== "DROP_PIN" && !OPINION_TYPES.includes(t);
 
 export function pickOf(type: QType | string | undefined): Pick {
   switch (type) {
@@ -113,6 +175,12 @@ export function pickOf(type: QType | string | undefined): Pick {
     case "SLIDER": return "number";
     case "PUZZLE": return "order";
     case "CATEGORISE": return "categorise";
+    case "SCALE": return "scale";
+    case "WORD_CLOUD": return "word";
+    case "OPEN_ENDED": return "long";
+    case "PIN_ANSWER":
+    case "DROP_PIN": return "point";
+    case "BRAINSTORM": return "ideas";
     case "SLIDE": return "none";
     default: return "one";
   }
@@ -138,6 +206,18 @@ export function blank(type: QType): EditorQuestion {
       return { ...base, timeLimitSeconds: 45, payload: { categories: ["", ""], catItems: [{ text: "", category: 0 }, { text: "", category: 0 }] } };
     case "SLIDE":
       return { ...base, payload: { title: "" } };
+    case "SCALE":
+      return { ...base, payload: { min: 1, max: 5, lowLabel: "", highLabel: "" } };
+    case "WORD_CLOUD":
+      return { ...base, timeLimitSeconds: 30 };
+    case "OPEN_ENDED":
+      return { ...base, timeLimitSeconds: 60 };
+    case "PIN_ANSWER":
+      return { ...base, timeLimitSeconds: 30, payload: { image: null, areas: [] } };
+    case "DROP_PIN":
+      return { ...base, timeLimitSeconds: 30, payload: { image: null } };
+    case "BRAINSTORM":
+      return { ...base, payload: { ideaSeconds: 120, voteSeconds: 30 } };
   }
 }
 
@@ -163,6 +243,21 @@ export function fromServer(raw: Record<string, unknown>): EditorQuestion {
   if (type === "SLIDER") {
     Object.assign(payload, { min: num(p.min), max: num(p.max), step: num(p.step), answer: num(p.answer), tol: num(p.tol),
       unit: typeof p.unit === "string" ? p.unit : "" });
+  }
+  const img = p.image && typeof p.image === "object" ? p.image as Record<string, unknown> : null;
+  if (IMAGE_TYPES.includes(type) || (REVEAL_TYPES.includes(type) && img)) {
+    payload.image = img ? { url: String(img.url ?? ""), alt: String(img.alt ?? ""), width: num(img.width) ?? undefined,
+      height: num(img.height) ?? undefined } : null;
+    if (type === "PIN_ANSWER") {
+      payload.areas = Array.isArray(p.areas) ? (p.areas as Record<string, unknown>[])
+        .map((a) => ({ x: num(a.x) ?? 0.5, y: num(a.y) ?? 0.5, r: num(a.r) ?? 0.1 })) : [];
+    }
+    if (REVEAL_TYPES.includes(type)) payload.reveal = p.reveal === true;
+  }
+  if (type === "BRAINSTORM") Object.assign(payload, { ideaSeconds: num(p.ideaSeconds) ?? 120, voteSeconds: num(p.voteSeconds) ?? 30 });
+  if (type === "SCALE") {
+    Object.assign(payload, { min: num(p.min), max: num(p.max), lowLabel: typeof p.lowLabel === "string" ? p.lowLabel : "",
+      highLabel: typeof p.highLabel === "string" ? p.highLabel : "" });
   }
   if (type === "CATEGORISE") {
     // The API's shape (wave1c-contract.md): categoryLabels, items, and correctCategory from item index to category.
@@ -247,6 +342,29 @@ export function toServer(q: EditorQuestion) {
       payload = { categoryLabels: labels, items: items.map((it) => it.text.trim()), correctCategory };
       break;
     }
+    case "SCALE":
+      choices = [];
+      correctIndexes = [];
+      payload = { min: q.payload.min ?? null, max: q.payload.max ?? null, lowLabel: (q.payload.lowLabel ?? "").trim(),
+        highLabel: (q.payload.highLabel ?? "").trim() };
+      break;
+    case "WORD_CLOUD":
+    case "OPEN_ENDED":
+      choices = [];
+      correctIndexes = [];
+      break;
+    case "BRAINSTORM":
+      choices = [];
+      correctIndexes = [];
+      payload = { ideaSeconds: q.payload.ideaSeconds ?? 120, voteSeconds: q.payload.voteSeconds ?? 30 };
+      break;
+    case "PIN_ANSWER":
+    case "DROP_PIN":
+      choices = [];
+      correctIndexes = [];
+      payload = { image: imageOut(q.payload.image) };
+      if (q.type === "PIN_ANSWER") payload.areas = (q.payload.areas ?? []).map(roundArea);
+      break;
     case "POLL":
     case "PUZZLE":
       correctIndexes = [];
@@ -254,6 +372,9 @@ export function toServer(q: EditorQuestion) {
     case "TRUE_FALSE":
       choices = ["True", "False"];
       break;
+  }
+  if (REVEAL_TYPES.includes(q.type) && q.payload.image && q.payload.image.url.trim()) {
+    payload = { ...payload, image: imageOut(q.payload.image), reveal: q.payload.reveal === true };
   }
   return {
     type: q.type,
@@ -336,6 +457,11 @@ export function missing(raw: EditorQuestion): string | null {
   if (!q.text.trim()) return "Write the question.";
   if (q.text.length > LIMITS.question) return `Shorten the question to ${LIMITS.question} characters or fewer.`;
 
+  if (REVEAL_TYPES.includes(q.type) && (raw.payload.reveal || raw.payload.image?.url.trim())) {
+    const problem = imageProblem(raw.payload.image);
+    if (problem) return problem;
+  }
+
   if (CHOICE_TYPES.includes(q.type)) {
     if (q.choices.filter((c) => c.trim()).length < LIMITS.minChoices) return "Write at least two answers.";
     if (q.choices.length > LIMITS.maxChoices) return "A question can have at most six answers. Remove one.";
@@ -392,6 +518,34 @@ export function missing(raw: EditorQuestion): string | null {
     if (q.choices.some((c) => !c.trim())) return "Fill in or remove the empty item.";
     if (q.choices.some((c) => c.trim().length > LIMITS.item)) return `Shorten each item to ${LIMITS.item} characters or fewer.`;
     if (sameAfterTrim(q.choices)) return "Make every item different.";
+    return null;
+  }
+
+  if (q.type === "SCALE") {
+    const { min, max, lowLabel = "", highLabel = "" } = raw.payload;
+    if (min !== 0 && min !== 1) return "Start the scale at 0 or 1.";
+    if (max == null || !Number.isInteger(max) || max <= min || max > LIMITS.scaleMax) return "End the scale at a whole number above its start, up to 10.";
+    if (!lowLabel.trim() || !highLabel.trim()) return "Label both ends of the scale.";
+    if (lowLabel.trim().length > LIMITS.scaleLabel || highLabel.trim().length > LIMITS.scaleLabel) {
+      return `Shorten each end label to ${LIMITS.scaleLabel} characters or fewer.`;
+    }
+    return null;
+  }
+  if (q.type === "WORD_CLOUD" || q.type === "OPEN_ENDED") return null;
+  if (q.type === "BRAINSTORM") {
+    const { ideaSeconds, voteSeconds } = raw.payload;
+    if (ideaSeconds == null || ideaSeconds < 30 || ideaSeconds > 240) return "The ideas round lasts 30 seconds to 4 minutes.";
+    if (voteSeconds == null || voteSeconds < 15 || voteSeconds > 120) return "The votes round lasts 15 seconds to 2 minutes.";
+    return null;
+  }
+  if (IMAGE_TYPES.includes(q.type)) {
+    const problem = imageProblem(raw.payload.image);
+    if (problem) return problem;
+    if (q.type === "PIN_ANSWER") {
+      const areas = raw.payload.areas ?? [];
+      if (areas.length === 0) return "Mark the right area on the image.";
+      if (areas.length > LIMITS.maxAreas) return "Mark up to 3 right areas.";
+    }
     return null;
   }
 
@@ -482,4 +636,41 @@ export function outcomeOf(r: { answered: boolean; correct: boolean; fraction?: n
   if (r.correct) return "correct";
   const fraction = r.fraction ?? 0;
   return fraction > 0 ? "partial" : "wrong";
+}
+
+/** A question's image as sent to the server: the address and alt text trimmed, the size kept when known. */
+function imageOut(img: QuestionImage | null | undefined) {
+  if (!img) return null;
+  return { url: img.url.trim(), alt: img.alt.trim(), ...(img.width ? { width: img.width } : {}), ...(img.height ? { height: img.height } : {}) };
+}
+
+function roundArea(a: PinArea): PinArea {
+  const r4 = (v: number) => Math.round(v * 10000) / 10000;
+  return { x: r4(a.x), y: r4(a.y), r: r4(a.r) };
+}
+
+/** What is missing from a question's image (an address that is https or on this site, and alt text); null when fine. */
+export function imageProblem(img: QuestionImage | null | undefined): string | null {
+  if (!img || !img.url.trim()) return "Add an image.";
+  const url = img.url.trim();
+  if (!(url.startsWith("https://") || (url.startsWith("/") && !url.startsWith("//")))) {
+    return "Use a secure image address (https) or one from this site.";
+  }
+  if (!img.alt.trim()) return "Describe the image for people who can't see it (alt text).";
+  if (img.alt.trim().length > LIMITS.alt) return `Shorten the image description to ${LIMITS.alt} characters or fewer.`;
+  return null;
+}
+
+/** Is the point inside the circle, judged in the image's proportions (as the server judges it, W28)? */
+export function insideArea(p: { x: number; y: number }, a: PinArea, aspect: number): boolean {
+  const dx = p.x - a.x;
+  const dy = (p.y - a.y) / aspect;
+  return dx * dx + dy * dy <= a.r * a.r + 1e-9;
+}
+
+/** Image reveal (W30): how many of the five tiles are uncovered at {@code now}, timed from when the question opened. */
+export function revealStep(openedAt: number, closesAt: number, now: number): number {
+  if (!(closesAt > openedAt)) return 5;
+  const share = (now - openedAt) / (closesAt - openedAt);
+  return Math.max(1, Math.min(5, Math.floor(share * 5) + 1));
 }

@@ -7,10 +7,11 @@ import { ActivityRound } from "@/components/ActivityRound";
 import { AnswerTile } from "@/components/Stage";
 import { OwnerBrandMark, useOwnerBrand } from "@/components/OwnerBrand";
 import { api, ApiError } from "@/lib/api";
-import { CategoriseForm, MultiSelectForm, SliderForm, TypeAnswerForm } from "@/components/AnswerInputs";
+import { CategoriseForm, FreeTextForm, IdeasForm, MultiSelectForm, ScaleForm, SliderForm, TypeAnswerForm } from "@/components/AnswerInputs";
 import { ACTIVITY_TYPES, ActivityAnswer, Answered, dueText, PlayInfo, PlayState, type TypedAnswer, typedAnswer } from "@/lib/assignments";
 import { keyText, outcomeOf, pickOf } from "@/lib/questionTypes";
 import { LoadingState } from "@/components/ui/States";
+import { PinForm, QuestionImageView } from "@/components/ImageQuestion";
 
 /** This device's key for the attempt at one assignment, kept so a reload carries on. */
 function keyName(code: string) {
@@ -239,6 +240,21 @@ export default function AssignmentPage() {
               <MultiSelectForm key={q.index} variant="stage" choices={q.choices} busy={busy} onSubmit={(c) => answer(typedAnswer.choices(c))} />
             )}
             {pick === "text" && <TypeAnswerForm key={q.index} variant="stage" busy={busy} onSubmit={(t) => answer(typedAnswer.text(t))} />}
+            {q.image && pick !== "point" && <QuestionImageView image={q.image} />}
+            {pick === "point" && q.image && (
+              <PinForm key={q.index} variant="stage" image={q.image} busy={busy} onSubmit={(point) => answer(typedAnswer.point(point))} />
+            )}
+            {pick === "ideas" && (
+              <IdeasForm key={q.index} variant="stage" busy={busy} maxLength={q.maxLength ?? 40}
+                         onSubmit={(ideas) => answer({ answer: { ideas } })} />
+            )}
+            {pick === "scale" && q.scale && (
+              <ScaleForm key={q.index} variant="stage" scale={q.scale} busy={busy} onSubmit={(v) => answer(typedAnswer.value(v))} />
+            )}
+            {(pick === "word" || pick === "long") && (
+              <FreeTextForm key={q.index} variant="stage" long={pick === "long"} max={q.maxLength ?? (pick === "long" ? 250 : 20)}
+                            busy={busy} onSubmit={(t) => answer(typedAnswer.text(t))} />
+            )}
             {pick === "number" && q.slider && (
               <SliderForm key={q.index} variant="stage" slider={q.slider} busy={busy} onSubmit={(v) => answer(typedAnswer.value(v))} />
             )}
