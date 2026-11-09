@@ -8,7 +8,7 @@ import { AnswerTile } from "@/components/Stage";
 import { OwnerBrandMark, useOwnerBrand } from "@/components/OwnerBrand";
 import { api, ApiError } from "@/lib/api";
 import { CategoriseForm, FreeTextForm, IdeasForm, MultiSelectForm, ScaleForm, SliderForm, TypeAnswerForm } from "@/components/AnswerInputs";
-import { ACTIVITY_TYPES, ActivityAnswer, Answered, dueText, PlayInfo, PlayState, type TypedAnswer, typedAnswer } from "@/lib/assignments";
+import { ACTIVITY_TYPES, ActivityAnswer, Answered, dueText, PlayInfo, PlayState, tryText, type TypedAnswer, typedAnswer } from "@/lib/assignments";
 import { keyText, outcomeOf, pickOf } from "@/lib/questionTypes";
 import { LoadingState } from "@/components/ui/States";
 import { PinForm } from "@/components/ImageQuestion";
@@ -123,7 +123,9 @@ export default function AssignmentPage() {
   const pick = q ? q.pick ?? pickOf(q.type) : "one";
   const outcome = feedback ? outcomeOf({ answered: true, correct: feedback.correct, fraction: feedback.fraction, counted: feedback.counted }) : null;
   const rightChoices = feedback ? feedback.correctIndexes ?? (feedback.correctIndex >= 0 ? [feedback.correctIndex] : []) : [];
-  const answerWords = feedback && q && (outcome === "wrong" || outcome === "partial")
+  const comesBack = !!feedback?.comesBack;
+  const retry = feedback && (feedback.tryNumber ?? 1) > 1;
+  const answerWords = feedback && q && !comesBack && (outcome === "wrong" || outcome === "partial")
     && (pick === "text" || pick === "number" || pick === "many" || pick === "categorise")
     ? keyText(q.type, feedback.key, q.choices, rightChoices, q.slider?.step ?? 1) : null;
   // A puzzle is a question like any other in a quiz (Wave 1b); matching and flashcards stay activity rounds.
@@ -183,13 +185,15 @@ export default function AssignmentPage() {
         {state && q && activity && (
           <>
             <div className="assignment-progress">
-              <span>{step} {q.index + 1} of {q.total}</span>
+              <span>{step} {q.index + 1} of {q.total}{tryText(q.tryNumber) && <span className="chip try-chip">{tryText(q.tryNumber)}</span>}</span>
               <span>{q.type === "CARD" ? state.correct + " known so far" : state.score + " points so far"}</span>
             </div>
             {feedback && (
-              <div className={"feedback assignment-feedback " + (feedback.correct ? "ok" : "no")} role="status">
-                {feedback.correct ? "✓ All right" : "✕ " + feedback.right + " of " + feedback.parts + " right"}
+              <div className={"feedback assignment-feedback " + (feedback.correct ? "ok" : comesBack ? "neutral" : "no")} role="status">
+                {feedback.correct ? "✓ All right" : comesBack ? "Not quite yet" : "✕ " + feedback.right + " of " + feedback.parts + " right"}
                 {feedback.points > 0 && <div style={{ fontSize: 18 }}>+{feedback.points} points</div>}
+                {comesBack && <div style={{ fontSize: 18, fontWeight: 400 }}>This one comes back at the end for another try.</div>}
+                {retry && feedback.correct && <div style={{ fontSize: 18, fontWeight: 400 }}>Right this time. Only first tries count for points.</div>}
               </div>
             )}
             {q.visual && <span className="question-visual-big" aria-hidden="true">{q.visual}</span>}
@@ -198,6 +202,7 @@ export default function AssignmentPage() {
               <ActivityRound key={q.index} q={q} feedback={feedback} busy={busy} onAnswer={answer} />
             ) : null}
             {feedback?.explanation && <div className="card">{feedback.explanation}</div>}
+            {feedback?.steps && <Steps steps={feedback.steps} />}
             {feedback && (
               <div className="row" style={{ justifyContent: "center" }}>
                 <button type="button" className="btn btn-primary" style={{ fontSize: 20 }} onClick={next} autoFocus>
@@ -230,7 +235,7 @@ export default function AssignmentPage() {
         {state && q && !activity && pick !== "none" && !feedback && (
           <>
             <div className="assignment-progress">
-              <span>Question {q.index + 1} of {q.total}</span>
+              <span>Question {q.index + 1} of {q.total}{tryText(q.tryNumber) && <span className="chip try-chip">{tryText(q.tryNumber)}</span>}</span>
               <span>{state.correct} right so far</span>
             </div>
             {q.visual && <span className="question-visual-big" aria-hidden="true">{q.visual}</span>}
@@ -274,10 +279,14 @@ export default function AssignmentPage() {
 
         {state && q && !activity && pick !== "none" && feedback && (
           <>
-            <div className={"feedback assignment-feedback " + (outcome === "correct" || outcome === "partial" ? "ok" : outcome === "vote" ? "neutral" : "no")}
+            <div className={"feedback assignment-feedback " + (comesBack ? "neutral" : outcome === "correct" || outcome === "partial" ? "ok" : outcome === "vote" ? "neutral" : "no")}
                  role="status">
-              {outcome === "correct" ? "✓ Correct" : outcome === "partial" ? "✓ Partly right" : outcome === "vote" ? "Thanks for voting" : "✕ Not quite"}
-              {(outcome === "correct" || outcome === "partial") && <div style={{ fontSize: 18 }}>+{feedback.points} points</div>}
+              {comesBack ? "Not quite yet" : outcome === "correct" ? "✓ Correct" : outcome === "partial" ? "✓ Partly right" : outcome === "vote" ? "Thanks for voting" : "✕ Not quite"}
+              {!comesBack && !retry && (outcome === "correct" || outcome === "partial") && <div style={{ fontSize: 18 }}>+{feedback.points} points</div>}
+              {comesBack && <div style={{ fontSize: 18, fontWeight: 400 }}>This one comes back at the end for another try.</div>}
+              {retry && !comesBack && (outcome === "correct" || outcome === "partial") && (
+                <div style={{ fontSize: 18, fontWeight: 400 }}>Right this time. Only first tries count for points.</div>
+              )}
               {answerWords && <div style={{ fontSize: 18, fontWeight: 400 }}>The answer: {answerWords}</div>}
             </div>
             <div className="question-text">{q.text}</div>
@@ -292,6 +301,7 @@ export default function AssignmentPage() {
               </div>
             )}
             {feedback.explanation && <div className="card">{feedback.explanation}</div>}
+            {feedback.steps && <Steps steps={feedback.steps} />}
             <div className="row" style={{ justifyContent: "center" }}>
               <button type="button" className="btn btn-primary" style={{ fontSize: 20 }} onClick={next} autoFocus>
                 {feedback.state.finished ? "See how you did" : "Next question"}
@@ -320,5 +330,17 @@ export default function AssignmentPage() {
         )}
       </main>
     </div>
+  );
+}
+
+/** A worked solution (Wave 3), folded away until the student opens it: the steps, one per line. */
+function Steps({ steps }: { steps: string }) {
+  return (
+    <details className="card steps">
+      <summary>Show the steps</summary>
+      <ol className="steps-list">
+        {steps.split("\n").map((line) => line.trim()).filter(Boolean).map((line, i) => <li key={i}>{line}</li>)}
+      </ol>
+    </details>
   );
 }

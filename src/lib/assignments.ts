@@ -21,6 +21,8 @@ export interface AssignmentSummary {
   createdAt: string;
   /** Each student gets their own order of questions and answers (missing from an older server). */
   shuffle?: boolean;
+  /** Practice (Wave 3): a question answered not fully right comes back at the end, up to 2 more times. */
+  practice?: boolean;
 }
 
 export interface AssignmentResults {
@@ -30,9 +32,11 @@ export interface AssignmentResults {
    * {@code cardsKnown} of {@code cards}: the flashcards the student knew.
    */
   attempts: { name: string; guest: boolean; score: number; correct: number; answered: number; questions: number;
-    startedAt: string; finishedAt: string | null; scored?: number; cards?: number; cardsKnown?: number }[];
-  /** Per type, as a live game's report (slides left out, polls not counted). */
-  questions: ReportQuestion[];
+    startedAt: string; finishedAt: string | null; scored?: number; cards?: number; cardsKnown?: number;
+    /** Right at any try: a practice assignment's "right by the third try" (else the same as correct). */
+    rightInTheEnd?: number }[];
+  /** Per type, as a live game's report (slides left out, polls not counted); first tries only. */
+  questions: (ReportQuestion & { rightInTheEnd?: number })[];
 }
 
 /** A student's own: {@code status} NOT_STARTED, IN_PROGRESS or DONE. */
@@ -109,6 +113,8 @@ export interface PlayQuestion {
   choiceImages?: (ShownPicture | null)[] | null;
   /** Wave 2g: a slide's YouTube clip, played on the student's device. */
   video?: { id: string; start?: number | null; end?: number | null } | null;
+  /** 1, or 2 or 3 when a practice assignment brings the question back. */
+  tryNumber?: number;
 }
 
 export interface PlayState {
@@ -146,6 +152,17 @@ export interface Answered {
   fraction?: number;
   counted?: boolean;
   key?: AnswerKey;
+  /** Wave 3: the worked solution, shown only now, after the answer; null when the question has none. */
+  steps?: string | null;
+  /** Practice: which try this was, and whether the question comes back at the end (the answer is kept back till then). */
+  tryNumber?: number;
+  comesBack?: boolean;
+}
+
+/** "Second try", "Third try", or null for a first try. */
+export function tryText(tryNumber: number | undefined): string | null {
+  if (!tryNumber || tryNumber <= 1) return null;
+  return tryNumber === 2 ? "Second try" : tryNumber === 3 ? "Third try" : "Try " + tryNumber;
 }
 
 /** What a student sends for one activity round. */

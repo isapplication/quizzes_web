@@ -8,7 +8,7 @@ import { POINTS, TIMES } from "@/lib/content";
 import { AreaEditor } from "@/components/ImageQuestion";
 import { clock, type MediaRef, parseTime, type SlideVideo } from "@/lib/media";
 import {
-  type EditorPayload, type EditorQuestion, LIMITS, QTYPES, QTYPE_HINT, QTYPE_LABEL, type QType, scored,
+  type EditorPayload, type EditorQuestion, LIMITS, offersSolution, QTYPES, QTYPE_HINT, QTYPE_LABEL, type QType, scored,
 } from "@/lib/questionTypes";
 
 /**
@@ -16,19 +16,22 @@ import {
  * answers with one or several marked right, accepted texts, the slider's scale, the puzzle's items in the right order,
  * or a slide's title and text. The checks that stop publishing are in lib/questionTypes.ts {@code missing}.
  */
-export function QuestionForm({ index, q, total, problem, grade, subject, onChange, onType, onMove, onCopy, onRemove }: {
+export function QuestionForm({ index, q, total, problem, grade, subject, types, onChange, onType, onMove, onCopy, onRemove }: {
   index: number;
   q: EditorQuestion;
   total: number;
   problem: string | null;
-  /** The quiz's grade and subject, for the standard suggestions. */
-  grade: number;
-  subject: string;
+  /** The quiz's grade, for the standard suggestions; the standard field shows only when it is given (the editor). */
+  grade?: number;
   onChange: (patch: Partial<EditorQuestion>) => void;
   onType: (type: QType) => void;
   onMove: (by: number) => void;
   onCopy: () => void;
   onRemove: () => void;
+  /** The quiz's subject: standard suggestions, and Math and Science questions can have a worked solution (W51). */
+  subject?: string;
+  /** The types offered in the type picker; every type when not given. */
+  types?: QType[];
 }) {
   const id = useId();
   const slide = q.type === "SLIDE";
@@ -51,7 +54,7 @@ export function QuestionForm({ index, q, total, problem, grade, subject, onChang
       <div className="field">
         <label htmlFor={id + "-type"}>Question type</label>
         <select id={id + "-type"} value={q.type} aria-describedby={id + "-type-hint"} onChange={(e) => onType(e.target.value as QType)}>
-          {QTYPES.map((t) => <option key={t} value={t}>{QTYPE_LABEL[t]}</option>)}
+          {(types ?? QTYPES).map((t) => <option key={t} value={t}>{QTYPE_LABEL[t]}</option>)}
         </select>
         <p className="hint" id={id + "-type-hint"}>{QTYPE_HINT[q.type]} Changing the type keeps the text{q.choices.length ? " and, between choice types, the answers" : ""}.</p>
       </div>
@@ -141,13 +144,27 @@ export function QuestionForm({ index, q, total, problem, grade, subject, onChang
         </div>
       )}
       {slide && <p className="hint" style={{ margin: 0 }}>A slide has no timer and no points: in a live game you click Next when the class has read it.</p>}
-      {!slide && <StandardField value={q.standard} grade={grade} subject={subject} onChange={(standard) => onChange({ standard })} />}
+      {!slide && grade != null && (
+        <StandardField value={q.standard} grade={grade} subject={subject ?? ""} onChange={(standard) => onChange({ standard })} />
+      )}
       {!slide && (
         <div className="field">
           <label htmlFor={id + "-explain"}>Explanation (optional)</label>
           <textarea id={id + "-explain"} rows={2} maxLength={LIMITS.explanation} value={q.explanation ?? ""}
                     onChange={(e) => onChange({ explanation: e.target.value || null })}
                     placeholder={q.type === "POLL" ? "Shown after the vote" : "Shown after the question: why the answer is right"} />
+        </div>
+      )}
+      {offersSolution(q, subject) && (
+        <div className="field">
+          <label htmlFor={id + "-solution"}>Worked solution (optional)</label>
+          <textarea id={id + "-solution"} rows={4} maxLength={LIMITS.solution} value={q.solution ?? ""}
+                    aria-describedby={id + "-solution-hint"}
+                    onChange={(e) => onChange({ solution: e.target.value || null })}
+                    placeholder={"One step per line, ending with the answer"} />
+          <p className="hint" id={id + "-solution-hint"}>
+            Students see the steps only after they answer. {(q.solution ?? "").length} / {LIMITS.solution}
+          </p>
         </div>
       )}
     </>

@@ -101,6 +101,8 @@ interface ClosedKey {
   qtype: string;
   correctIndexes: number[];
   key: AnswerKey;
+  /** Wave 3: the worked solution, sent only once the question has closed; null when there is none. */
+  solution: string | null;
 }
 
 /** What this player sent, shown while they wait: a shape for a single choice, otherwise words. */
@@ -250,6 +252,7 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
           qtype: String(m.qtype ?? "QUIZ"),
           correctIndexes: Array.isArray(m.correctIndexes) ? (m.correctIndexes as number[]) : ci >= 0 ? [ci] : [],
           key: (m.key as AnswerKey) ?? {},
+          solution: typeof m.solution === "string" && m.solution.trim() ? m.solution : null,
         });
         break;
       }
@@ -582,6 +585,14 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
                 <div className="gl-sub"><TeamBadge team={result.team} name={result.teamName} /> is {ordinal(result.teamRank)} of {result.teams} teams</div>
               )}
             </div>
+            {key?.solution && (
+              <details className="gl-card steps">
+                <summary>Show the steps</summary>
+                <ol className="steps-list">
+                  {key.solution.split("\n").map((line) => line.trim()).filter(Boolean).map((line, i) => <li key={i}>{line}</li>)}
+                </ol>
+              </details>
+            )}
           </div>
         )}
         {view === "final" && final && (

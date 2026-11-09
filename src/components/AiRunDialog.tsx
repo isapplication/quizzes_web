@@ -42,7 +42,12 @@ export function AiRunDialog({ runId, path, onClose }: { runId: string; path: str
               {run.schoolName && <><dt>Workspace</dt><dd>{run.schoolName}</dd></>}
               <dt>For</dt><dd>{forWhom(run)}</dd>
               <dt>Asked on</dt><dd>{when(run.createdAt)}</dd>
-              <dt>Topic</dt><dd>{gradeLabel(run.grade)} · {run.subject}</dd>
+              <dt>Topic</dt><dd>{gradeLabel(run.grade)} · {run.subject}{run.kind === "LESSON" && " · a lesson"}</dd>
+              {run.sourceKind && run.sourceKind !== "TOPIC" && (
+                <><dt>Drafted from</dt><dd>{run.sourceTitle ?? run.sourceKind}
+                  {run.sourcePages ? <span className="muted"> · {run.sourcePages} {run.sourceKind === "PHOTOS" ? "photo" : "page"}{run.sourcePages === 1 ? "" : "s"}</span> : null}
+                  <div className="muted">Not kept: only its title, size and fingerprint are recorded.</div></dd></>
+              )}
               <dt>Status</dt><dd><span className={runChip(run.status)}>{RUN_STATUS[run.status]}</span>
                 {run.errorMessage && <div className="muted">{run.errorMessage}</div>}</dd>
               {run.publishedQuizId && <><dt>Published</dt><dd>{run.publishedAt ? when(run.publishedAt) : "Yes"}</dd></>}

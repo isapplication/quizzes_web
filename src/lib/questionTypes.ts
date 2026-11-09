@@ -101,6 +101,8 @@ export const LIMITS = {
   categoryLabel: 30,
   minCatItems: 2,
   maxCatItems: 16,
+  /** A worked solution, step by step (Wave 3, W51). */
+  solution: 1000,
   catItem: 40,
   scaleMax: 10,
   scaleLabel: 30,
@@ -163,12 +165,22 @@ export interface EditorQuestion {
   explanation: string | null;
   /** The standard code the question covers (W63), in capitals; empty when none. */
   standard?: string | null;
+  /** A worked solution, step by step, shown to players only after they answer (Math and Science); null for none. */
+  solution?: string | null;
   /** Read only: what the server sent before 1b; never relied on after {@link fromServer}. */
   correctIndex?: number;
   /** The question's (or slide's) picture, with its description (part 2f). */
   image?: MediaRef | null;
   /** A picture per answer of a quiz, multi-select or poll question, in the answers' order (null where there is none). */
   choiceImages?: (MediaRef | null)[];
+}
+
+/** The subjects whose questions get a worked solution (W51). */
+export const SOLUTION_SUBJECTS = ["Math", "Science"];
+
+/** Whether the editor offers a worked solution: for scored questions of Math and Science, or one that already has one. */
+export function offersSolution(q: { type: QType; solution?: string | null }, subject: string | undefined): boolean {
+  return scored(q.type) && (SOLUTION_SUBJECTS.includes(subject ?? "") || !!q.solution);
 }
 
 export const CHOICE_TYPES: QType[] = ["QUIZ", "MULTI_SELECT", "POLL"];
@@ -314,6 +326,7 @@ export function fromServer(raw: Record<string, unknown>): EditorQuestion {
     choiceImages: CHOICE_TYPES.includes(type) && pictures.some(Boolean)
       ? choices.map((_, i) => pictures[i] ?? null) : [],
     standard: typeof raw.standard === "string" && raw.standard ? raw.standard : null,
+    solution: typeof raw.solution === "string" && raw.solution.trim() ? raw.solution : null,
   };
 }
 
@@ -324,7 +337,7 @@ export function fromServer(raw: Record<string, unknown>): EditorQuestion {
 export function changeType(q: EditorQuestion, type: QType): EditorQuestion {
   if (q.type === type) return q;
   const next: EditorQuestion = { ...blank(type), text: q.text, explanation: q.explanation, points: q.points, image: q.image ?? null,
-    standard: q.standard ?? null };
+    standard: q.standard ?? null, solution: scored(type) ? q.solution ?? null : null };
   if (CHOICE_TYPES.includes(q.type) && CHOICE_TYPES.includes(type)) {
     next.choices = [...q.choices];
     next.choiceImages = [...(q.choiceImages ?? [])];
@@ -444,6 +457,7 @@ export function toServer(q: EditorQuestion) {
     image: described(q.image) ? { mediaId: q.image!.mediaId, alt: q.image!.alt.trim() } : null,
     choiceImages,
     standard: standardCode(q.standard),
+    solution: scored(q.type) && q.solution && q.solution.trim() ? q.solution.trim() : null,
   };
 }
 

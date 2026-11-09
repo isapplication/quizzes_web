@@ -16,6 +16,7 @@ export function AssignBox({ target }: { target: HostTarget }) {
   const school = !isIndependent(me);
   const [classCode, setClassCode] = useState("");
   const [signedInOnly, setSignedInOnly] = useState(false);
+  const [practice, setPractice] = useState(false);
   const [due, setDue] = useState("");
   const [shuffle, setShuffle] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -31,7 +32,7 @@ export function AssignBox({ target }: { target: HostTarget }) {
       setMade(await api<AssignmentSummary>("/api/v1/assignments", {
         method: "POST",
         body: {
-          ...target, classCode: classCode || null, requireSignIn: school && signedInOnly,
+          ...target, classCode: classCode || null, requireSignIn: school && signedInOnly, practice,
           // The picker gives local time; the API wants an instant.
           dueAt: due ? new Date(due).toISOString() : null, shuffle,
         },
@@ -60,6 +61,7 @@ export function AssignBox({ target }: { target: HostTarget }) {
           Students open this link and do it at their own pace{made.classCode && <> (class {made.classCode} also sees it on their home page)</>}.
           {made.dueAt && <> {dueText(made.dueAt)}.</>}
           {made.shuffle && <> Each student gets their own order of questions and answers.</>}
+          {made.practice && <> Practice: wrong answers come back at the end, up to 2 more times.</>}
         </p>
         <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
           <input type="text" readOnly value={made.link} aria-label="Assignment link" style={{ flex: "1 1 260px", minWidth: 0 }}
@@ -105,6 +107,13 @@ export function AssignBox({ target }: { target: HostTarget }) {
         <input type="checkbox" checked={shuffle} onChange={(e) => setShuffle(e.target.checked)} />
         <span>Shuffle questions and answers <span className="muted">(each student gets their own order, so copying is harder)</span></span>
       </label>
+      <label className="check">
+        <input type="checkbox" checked={practice} onChange={(e) => setPractice(e.target.checked)} aria-describedby="assign-practice-hint" />
+        <span>Practice</span>
+      </label>
+      <p className="hint" id="assign-practice-hint" style={{ margin: 0 }}>
+        A question answered wrong comes back at the end, up to 2 more times. The score counts first tries only.
+      </p>
       {error && <div className="alert alert-danger" role="alert">{error}</div>}
       <div className="row">
         <button type="submit" className="btn btn-secondary" disabled={busy}>{busy ? "Assigning…" : "Assign"}</button>
