@@ -7,12 +7,13 @@ import { api, ApiError } from "@/lib/api";
 import { applyIcon, isSchoolAdmin, SchoolBrand, useMe } from "@/lib/me";
 import { LoadingState, PageHeader } from "@/components/ui/States";
 
-type Kind = "logo" | "icon" | "terms";
+type Kind = "logo" | "icon" | "terms" | "background";
 
 const FILES: { kind: Kind; title: string; hint: string; accept: string }[] = [
   { kind: "logo", title: "Logo", hint: "PNG, JPG or WebP, up to 1 MB. A wide logo on a clear background looks best.", accept: "image/png,image/jpeg,image/webp" },
   { kind: "icon", title: "Browser icon", hint: "PNG or ICO, up to 256 KB. Square, at least 64 × 64 pixels.", accept: "image/png,image/x-icon,.ico" },
   { kind: "terms", title: "Terms and conditions", hint: "PDF, up to 5 MB. Linked at the bottom of every page.", accept: "application/pdf" },
+  { kind: "background", title: "Game background", hint: "PNG or JPG, up to 2 MB. Shown behind live game screens, under a dark layer so the words stay easy to read. A wide picture works best.", accept: "image/png,image/jpeg" },
 ];
 
 /** Defaults shown until the school picks its own: Quizplayo's blue, navy and amber. */
@@ -81,7 +82,7 @@ function Brand() {
       "Colours saved. Reload the page to see them everywhere.");
   }
 
-  const url = (kind: Kind) => (brand ? { logo: brand.logoUrl, icon: brand.iconUrl, terms: brand.termsUrl }[kind] : null);
+  const url = (kind: Kind) => (brand ? { logo: brand.logoUrl, icon: brand.iconUrl, terms: brand.termsUrl, background: brand.backgroundUrl ?? null }[kind] : null);
 
   return (
     <div className="stack">
@@ -122,7 +123,7 @@ function Brand() {
             </section>
           </div>
 
-          <Preview name={me.school.name} logoUrl={brand.logoUrl} colors={colors} />
+          <Preview name={me.school.name} logoUrl={brand.logoUrl} colors={colors} backgroundUrl={brand.backgroundUrl ?? null} />
         </div>
       )}
     </div>
@@ -187,7 +188,7 @@ function Colour({ label, hint, value, onChange }: { label: string; hint: string;
 }
 
 /** How the school's pages will look with these colours and this logo. */
-function Preview({ name, logoUrl, colors }: { name: string; logoUrl: string | null; colors: typeof DEFAULTS }) {
+function Preview({ name, logoUrl, colors, backgroundUrl }: { name: string; logoUrl: string | null; colors: typeof DEFAULTS; backgroundUrl: string | null }) {
   return (
     <aside className="brand-preview" aria-label="Preview">
       <p className="muted">Preview</p>
@@ -216,6 +217,14 @@ function Preview({ name, logoUrl, colors }: { name: string; logoUrl: string | nu
           <p><a href="#" style={{ color: colors.primary }} onClick={(e) => e.preventDefault()}>A link in your colour</a></p>
         </div>
       </div>
+      {backgroundUrl && (
+        <>
+          <p className="muted" style={{ marginTop: 16 }}>Behind a live game question</p>
+          <div className="preview-game" style={{ "--gl-background": `url("${backgroundUrl}")` } as React.CSSProperties}>
+            <div className="preview-game-card">Which planet is closest to the Sun?</div>
+          </div>
+        </>
+      )}
     </aside>
   );
 }

@@ -2,7 +2,9 @@
 
 import { useId, useState } from "react";
 import { AnswerShape, shapeName, shapeNumber } from "@/components/AnswerShape";
+import { PictureField } from "@/components/PictureField";
 import { POINTS, TIMES } from "@/lib/content";
+import { clock, type MediaRef, parseTime, type SlideVideo } from "@/lib/media";
 import {
   type EditorPayload, type EditorQuestion, LIMITS, QTYPES, QTYPE_HINT, QTYPE_LABEL, type QType, scored,
 } from "@/lib/questionTypes";
@@ -64,6 +66,12 @@ export function QuestionForm({ index, q, total, problem, onChange, onType, onMov
         <p className="hint">{q.text.length} / {max}</p>
       </div>
 
+      <div className="field">
+        <span className="field-label" id={id + "-picture"}>Picture (optional)</span>
+        <PictureField label={slide ? "the slide" : "the question"} value={q.image} onChange={(image) => onChange({ image })} />
+      </div>
+      {slide && <VideoFields video={q.payload.video ?? null} onChange={(video) => setPayload({ video })} />}
+
       {(q.type === "QUIZ" || q.type === "TRUE_FALSE" || q.type === "MULTI_SELECT" || q.type === "POLL") && (
         <ChoiceFields q={q} onChange={onChange} />
       )}
@@ -113,13 +121,20 @@ function ChoiceFields({ q, onChange }: { q: EditorQuestion; onChange: (patch: Pa
   const editable = q.type !== "TRUE_FALSE";
   const legend = one ? "Answers: mark the correct one" : many ? "Answers: tick every correct one (not all of them)" : "Answers: a poll has no correct answer";
 
+  const pictures = q.choices.map((_, k) => q.choiceImages?.[k] ?? null);
+
   function setChoice(i: number, text: string) {
     onChange({ choices: q.choices.map((c, k) => (k === i ? text : c)) });
+  }
+
+  function setPicture(i: number, picture: MediaRef | null) {
+    onChange({ choiceImages: pictures.map((p, k) => (k === i ? picture : p)) });
   }
 
   function removeChoice(i: number) {
     onChange({
       choices: q.choices.filter((_, k) => k !== i),
+      choiceImages: pictures.filter((_, k) => k !== i),
       correctIndexes: q.correctIndexes.filter((c) => c !== i).map((c) => (c > i ? c - 1 : c)),
     });
   }
@@ -141,7 +156,7 @@ function ChoiceFields({ q, onChange }: { q: EditorQuestion; onChange: (patch: Pa
             <AnswerShape index={i} size={22} color="currentColor" />
             {editable ? (
               <input type="text" aria-label={name} maxLength={LIMITS.answer} value={c} onChange={(e) => setChoice(i, e.target.value)}
-                     placeholder={"Answer " + (i + 1) + (i >= 2 ? " (optional)" : "")} />
+                     placeholder={pictures[i] ? "Text (optional)" : "Answer " + (i + 1) + (i >= 2 ? " (optional)" : "")} />
             ) : (
               <span className="answer-edit-fixed">{c}</span>
             )}
@@ -155,13 +170,61 @@ function ChoiceFields({ q, onChange }: { q: EditorQuestion; onChange: (patch: Pa
             {editable && q.choices.length > LIMITS.minChoices && (
               <button type="button" className="answer-edit-remove" aria-label={"Remove answer " + (i + 1)} onClick={() => removeChoice(i)}>×</button>
             )}
+            {editable && (
+              <div className="answer-edit-picture">
+                <PictureField compact label={"answer " + (i + 1)} value={pictures[i]} onChange={(p) => setPicture(i, p)} />
+              </div>
+            )}
           </div>
         );
       })}
       {editable && q.choices.length < LIMITS.maxChoices && (
-        <button type="button" className="btn btn-light" onClick={() => onChange({ choices: [...q.choices, ""] })}>
+        <button type="button" className="btn btn-light" onClick={() => onChange({ choices: [...q.choices, ""], choiceImages: [...pictures, null] })}>
           + Add an answer <span className="muted">({q.choices.length} of {LIMITS.maxChoices})</span>
         </button>
+      )}
+    </fieldset>
+  );
+}
+
+/**
+ * A slide's video (wave2-plan.md part 2g): paste a YouTube link, and say where the clip starts and stops. Only the video's
+ * id and the two times are kept; it plays on the classroom screen (and on a student's device in an assignment), through
+ * youtube-nocookie.com, never by itself.
+ */
+function VideoFields({ video, onChange }: { video: SlideVideo | null; onChange: (video: SlideVideo | null) => void }) {
+  const id = useId();
+  const link = video?.url ?? (video?.id ? "https://youtu.be/" + video.id : "");
+  const [start, setStart] = useState(video?.start ? clock(video.start) : "");
+  const [end, setEnd] = useState(video?.end ? clock(video.end) : "");
+  // A blank start box sends no start, so a time in the pasted link (…?t=90) is used; with neither, the clip starts at 0:00.
+  const times = (s: string, e: string) => ({ start: parseTime(s), end: parseTime(e) });
+  return (
+    <fieldset className="type-edits" aria-describedby={id + "-hint"}>
+      <legend>Video (optional)</legend>
+      <p className="hint" id={id + "-hint"} style={{ marginTop: 0 }}>
+        A YouTube link, played on the big screen from the start time to the end time (up to 10 minutes). It never plays by itself:
+        you press play. Only YouTube links work.
+      </p>
+      <div className="field">
+        <label htmlFor={id + "-link"}>YouTube link</label>
+        <input id={id + "-link"} type="url" inputMode="url" value={link} placeholder="https://www.youtube.com/watch?v=…"
+               onChange={(e) => onChange(e.target.value.trim() ? { url: e.target.value, ...times(start, end) } : null)} />
+      </div>
+      {video && (
+        <div className="form-grid">
+          <div className="field">
+            <label htmlFor={id + "-start"}>Starts at</label>
+            <input id={id + "-start"} type="text" inputMode="numeric" value={start} placeholder="0:00" aria-describedby={id + "-time-hint"}
+                   onChange={(e) => { setStart(e.target.value); onChange({ ...video, start: parseTime(e.target.value) }); }} />
+          </div>
+          <div className="field">
+            <label htmlFor={id + "-end"}>Ends at</label>
+            <input id={id + "-end"} type="text" inputMode="numeric" value={end} placeholder="1:30" aria-describedby={id + "-time-hint"}
+                   onChange={(e) => { setEnd(e.target.value); onChange({ ...video, end: parseTime(e.target.value) }); }} />
+          </div>
+          <p className="hint" id={id + "-time-hint"} style={{ gridColumn: "1 / -1", margin: 0 }}>Minutes and seconds, like 1:05, or seconds, like 65.</p>
+        </div>
       )}
     </fieldset>
   );

@@ -36,6 +36,9 @@ export interface QuestionView {
   visual: string | null;
   answer: Record<string, unknown>;
   playableLive: boolean;
+  /** Wave 2f: the question's picture and each answer's picture, with signed addresses. */
+  image?: { mediaId: string; alt: string; url?: string | null; width?: number | null; height?: number | null } | null;
+  choiceImages?: ({ mediaId: string; alt: string; url?: string | null; width?: number | null; height?: number | null } | null)[] | null;
 }
 
 export interface QuizView {

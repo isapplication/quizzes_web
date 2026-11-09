@@ -15,7 +15,9 @@ import { MeProvider, ownBrand, ShownBrand, useMe } from "@/lib/me";
 import { formatPin } from "@/lib/pin";
 import { OwnerBrandMark, useOwnerBrand } from "@/components/OwnerBrand";
 import { JoinQr, RoomPatternCard } from "@/components/live/JoinExtras";
-import { HostOpenAnswers, HostResults, HostSlide, type HostClosed, type HostQuestion } from "@/components/live/HostQuestion";
+import { HostOpenAnswers, HostQuestionPicture, HostResults, HostSlide, type HostClosed, type HostQuestion } from "@/components/live/HostQuestion";
+import { NO_REACTIONS, reactionCounts, type ReactionCounts } from "@/lib/media";
+import { questionSpeech, ReadAloudButton, useAutoRead, useReadAloudSetting } from "@/lib/readAloud";
 import { type Pick, pickOf } from "@/lib/questionTypes";
 
 interface Hosted {
@@ -108,6 +110,9 @@ function HostScreen() {
   const [teamCount, setTeamCount] = useState(0);
   // After a question closes: its answers first, then the leaderboard when the teacher asks for it.
   const [showBoard, setShowBoard] = useState(false);
+  // How the class reacts to the slide on screen (part 2g), and whether questions are read aloud (part 2f; off until chosen).
+  const [reactions, setReactions] = useState<ReactionCounts>(NO_REACTIONS);
+  const [readAloud, setReadAloud] = useReadAloudSetting();
   const look = game?.lookGrade ?? null;
   const band = lookBand(look);
   const words = lookWords(band);
@@ -126,6 +131,7 @@ function HostScreen() {
         if (phase === "LOBBY") setView("lobby");
         if (phase === "QUESTION" && m.question) {
           setQuestion(m.question as unknown as Question);
+          setReactions(reactionCounts(m.reactions));
           setAnswered({ answered: Number(m.answered ?? 0), expected: Number(m.expected ?? 0) });
           setView("question");
         }
@@ -133,7 +139,8 @@ function HostScreen() {
           const lq = m.lastQuestion as Record<string, unknown>;
           setQuestion({ index: Number(lq.index), total: Number(m.total), text: String(lq.text), visual: (lq.visual as string) ?? null,
             choices: (lq.choices as string[]) ?? [], openedAt: 0, closesAt: 0, qtype: lq.qtype as string | undefined,
-            pick: lq.pick as Pick | undefined, slider: lq.slider as HostQuestion["slider"], title: lq.title as string | undefined });
+            pick: lq.pick as Pick | undefined, slider: lq.slider as HostQuestion["slider"], title: lq.title as string | undefined,
+            image: lq.image as HostQuestion["image"], choiceImages: lq.choiceImages as HostQuestion["choiceImages"] });
           setClosed({ index: Number(lq.index), correctIndex: Number(lq.correctIndex), explanation: (lq.explanation as string) ?? null,
             counts: (lq.counts as number[]) ?? [], answered: 0, leaderboard: (m.leaderboard as Ranked[]) ?? [],
             teams: (m.teams as TeamStanding[]) ?? undefined, last: Number(lq.index) + 1 >= Number(m.total),
@@ -158,11 +165,15 @@ function HostScreen() {
         break;
       case "question":
         setQuestion(m as unknown as Question);
+        setReactions(NO_REACTIONS);
         setAnswered({ answered: 0, expected: Number(m.expected ?? 0) });
         setView("question");
         break;
       case "answers":
         setAnswered({ answered: Number(m.answered), expected: Number(m.expected) });
+        break;
+      case "reactions":
+        setReactions(reactionCounts(m));
         break;
       case "closed":
         // A slide has no results: the server moves straight on to the next question.
@@ -225,17 +236,27 @@ function HostScreen() {
     if (view === "podium") sound("fanfare");
   }, [view, sound]);
 
+  // The host's option "Read questions aloud": each new question is read on this screen, in this person's language.
+  const spoken = view === "question" && question && pickFor(question) !== "none"
+    ? questionSpeech(question.text, question.choices, question.choiceImages) : null;
+  const canSpeak = useAutoRead(readAloud && view === "question", spoken, me.locale);
+
   const joinUrl = typeof window === "undefined" ? "" : window.location.host + "/play";
   const lastQuestion = closed?.last ?? false;
 
   return (
-    <GameLook grade={look} kind="host">
+    <GameLook grade={look} kind="host" background={shown.backgroundUrl}>
       <header className="gl-bar">
         <OwnerBrandMark brand={shown} />
         <span className="gl-spacer" />
         {game && <span className="gl-pill">{game.quizTitle}{game.classCode && <> · Class {game.classCode}</>}</span>}
         <span className="gl-pill" role="status">{status === "connected" ? "● Live" : status === "reconnecting" ? "Reconnecting…" : status}</span>
         <SoundToggle muted={muted} onToggle={toggle} />
+        {canSpeak && (
+          <label className="gl-quiet gl-read-aloud-option">
+            <input type="checkbox" checked={readAloud} onChange={(e) => setReadAloud(e.target.checked)} /> Read questions aloud
+          </label>
+        )}
         {view !== "podium" && view !== "lobby" && (
           <button type="button" className="gl-quiet" onClick={() => window.confirm("End the game now and show the podium?") && send("end")}>
             End game
@@ -311,7 +332,7 @@ function HostScreen() {
         {view === "intro" && intro && <Intro intro={intro} serverNow={serverNow} grade={look} />}
 
         {view === "question" && question && pickFor(question) === "none" && (
-          <HostSlide question={question} last={question.index + 1 >= question.total} onNext={() => send("next")} />
+          <HostSlide question={question} last={question.index + 1 >= question.total} onNext={() => send("next")} reactions={reactions} />
         )}
 
         {view === "question" && question && pickFor(question) !== "none" && (
@@ -335,8 +356,10 @@ function HostScreen() {
               <h1 className="gl-card gl-q">
                 {question.visual && <span className="gl-visual" aria-hidden="true">{question.visual}</span>}{question.text}
               </h1>
+              <ReadAloudButton text={questionSpeech(question.text, question.choices, question.choiceImages)} locale={me.locale} />
               <Buddy grade={look} className="gl-buddy-side" />
             </div>
+            <HostQuestionPicture question={question} />
             <HostOpenAnswers question={question} />
           </>
         )}
@@ -357,6 +380,7 @@ function HostScreen() {
               </h1>
               <Buddy grade={look} mood="happy" className="gl-buddy-side" />
             </div>
+            <HostQuestionPicture question={question} />
             <HostResults question={question} closed={closed} />
           </>
         )}

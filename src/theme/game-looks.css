@@ -491,3 +491,54 @@
   .gl-tile, .gl-card, .gl-btn, .gl-chip, .gl-board li { border: 2px solid CanvasText; }
   .gl-tile.is-dim { opacity: 0.5; }
 }
+
+/* ---------- Pictures (Wave 2f): the question's, the answers', a slide's, and the school's own background ---------- */
+.q-picture { display: block; max-width: 100%; height: auto; object-fit: contain; border-radius: var(--tile-radius, 12px); }
+/* The question's picture takes the room above the answers and shrinks to fit; it is never cropped. */
+.gl-q-picture { align-self: center; width: auto; max-height: 34vh; background: var(--card); }
+.gl-host .gl-q-picture { max-height: clamp(160px, 30dvh, 520px); }
+.gl-player .gl-q-picture { max-height: 24dvh; }
+/* An answer that is a picture keeps its colour and its shape; the picture sits inside the tile. */
+.gl-tile-picture { flex: 1; min-width: 0; max-height: 100%; width: auto; max-width: 100%; align-self: stretch; object-fit: contain; border-radius: calc(var(--tile-radius, 12px) * 0.6); background: rgb(255 255 255 / 0.92); padding: 0.15em; }
+.gl-host .gl-tile-picture { max-height: clamp(70px, 16dvh, 280px); }
+.gl-player .gl-tile-picture { max-height: 18dvh; }
+/* A picture answer: the shape on the left, the picture beside it, any text under both; it works in a narrow phone tile. */
+.gl-tile:has(.gl-tile-picture) { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; justify-items: center; min-height: 4.2em; row-gap: 0.3em; }
+.gl-tile:has(.gl-tile-picture) .gl-tile-picture { grid-column: 2; align-self: center; flex: none; max-width: 100%; }
+.gl-tile:has(.gl-tile-picture) .gl-tile-text { grid-column: 1 / -1; text-align: center; }
+.gl-q-with-speaker { display: flex; align-items: center; gap: 8px; }
+.gl-q-with-speaker .gl-card { flex: 1; min-width: 0; }
+.gl-q-row .read-aloud { flex: none; }
+.gl-read-aloud-option { gap: 0.5em; cursor: pointer; }
+.read-aloud { flex: none; display: inline-grid; place-items: center; min-width: 44px; min-height: 44px; border-radius: 999px; border: 1px solid var(--line, var(--border)); background: var(--soft, var(--card)); color: inherit; font-size: 1.1em; cursor: pointer; }
+.read-aloud[aria-pressed="true"] { background: var(--pc); color: var(--pc-ink, #fff); }
+
+/* The school's own background replaces the look's art, under a dark layer so the words stay readable on any picture. */
+.gl.has-background { background: var(--stage-bg); }
+.gl-school-background { position: absolute; inset: 0; z-index: -1; pointer-events: none; background: var(--gl-background) center / cover no-repeat; }
+.gl-school-background::after { content: ""; position: absolute; inset: 0; background: rgb(0 0 0 / 0.62); }
+.gl.has-background { --stage-ink: #ffffff; --soft: rgb(0 0 0 / 0.45); --line: rgb(255 255 255 / 0.45); }
+.gl.has-background .gl-pill, .gl.has-background .gl-quiet, .gl.has-background .read-aloud { background: rgb(0 0 0 / 0.5); color: #ffffff; border-color: rgb(255 255 255 / 0.45); }
+
+/* Reactions: counts and words are always there; the floating icons are motion, so only where it is welcome. */
+.reaction-wall { position: relative; }
+.reaction-counts { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 0.6em 1.2em; }
+.reaction-counts li { display: grid; justify-items: center; gap: 0.1em; min-width: 5.5em; }
+.reaction-icon { font-size: 2em; line-height: 1; }
+.reaction-word { font-weight: 700; }
+.reaction-count { font-size: 1.6em; font-variant-numeric: tabular-nums; }
+.reaction-sky { position: absolute; left: 0; right: 0; bottom: 100%; height: 40dvh; pointer-events: none; overflow: clip; }
+.reaction-floater { display: none; position: absolute; bottom: 0; font-size: 2.6em; }
+@media (prefers-reduced-motion: no-preference) {
+  .reaction-floater { display: block; animation: reaction-float 2.8s ease-out forwards; }
+  @keyframes reaction-float {
+    from { transform: translateY(0) scale(0.8); opacity: 1; }
+    to { transform: translateY(-36dvh) scale(1.3); opacity: 0; }
+  }
+}
+.reaction-buttons { display: grid; grid-template-columns: repeat(auto-fit, minmax(7.5em, 1fr)); gap: 8px; width: 100%; max-width: 560px; }
+.reaction-button { display: grid; justify-items: center; gap: 2px; padding: 10px 6px; min-height: 64px; border-radius: var(--tile-radius, 12px); border: 2px solid var(--line, var(--border)); background: var(--card); color: var(--sc); font: inherit; cursor: pointer; }
+.reaction-button .reaction-icon { font-size: 1.8em; }
+.reaction-button.is-chosen { outline: 4px solid var(--stage-ink); outline-offset: 2px; border-color: var(--pc); }
+.reaction-button:disabled { opacity: 0.55; cursor: default; }
+.gl-host .gl-slide { padding: 0.6em 1em; }

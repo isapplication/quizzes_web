@@ -12,6 +12,8 @@ export interface SchoolBrand {
   iconUrl: string | null;
   termsUrl: string | null;
   termsName: string | null;
+  /** The school's picture behind live game screens (wave2-plan.md, W27). */
+  backgroundUrl?: string | null;
 }
 
 export type Role = "STUDENT" | "PARENT" | "CONTENT_REVIEWER" | "TEACHER" | "SCHOOL_ADMIN";
@@ -81,6 +83,8 @@ export interface ShownBrand {
   logoUrl: string | null;
   iconUrl: string | null;
   theme: Record<string, string>;
+  /** The school's picture behind live game screens; null shows the look's own art. */
+  backgroundUrl?: string | null;
 }
 
 const THEME_VARIABLES = /^--(pc|plc|pgc|sc|slc|tc|tlc|fc|flc|success|warning|danger)$/;

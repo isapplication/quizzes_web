@@ -1,5 +1,6 @@
 /** Assignments: a quiz done at each student's own pace, by link or for a class (starter-library plan, Step 3a). */
 import type { ReportQuestion } from "@/components/QuestionResult";
+import type { ShownPicture } from "@/lib/media";
 import type { ShownBrand } from "@/lib/me";
 import type { AnswerKey, Pick } from "@/lib/questionTypes";
 
@@ -95,6 +96,11 @@ export interface PlayQuestion {
   title?: string | null;
   /** CATEGORISE: the categories and the items shuffled; answered by the items' shown places. */
   categorise?: { categories: string[]; items: string[] } | null;
+  /** Wave 2f: the question's picture and each answer's picture (null where an answer has none), with signed addresses. */
+  image?: ShownPicture | null;
+  choiceImages?: (ShownPicture | null)[] | null;
+  /** Wave 2g: a slide's YouTube clip, played on the student's device. */
+  video?: { id: string; start?: number | null; end?: number | null } | null;
 }
 
 export interface PlayState {

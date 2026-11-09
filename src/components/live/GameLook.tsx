@@ -1,5 +1,5 @@
 import { Andika, Fredoka, Inter, Lexend, Space_Grotesk } from "next/font/google";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { lookBand, lookGrade } from "@/lib/gameLook";
 import { Scene } from "./LookArt";
 import "@/theme/game-looks.css";
@@ -18,16 +18,21 @@ const FONTS = [andika, fredoka, lexend, spaceGrotesk, inter].map((f) => f.variab
  * school's colours. {@code kind} "host" is the classroom screen (scales with its width up to a projector), "player"
  * a phone, "compact" the class simulator's small frames (no scene).
  */
-export function GameLook({ grade, kind, className = "", children }: {
+export function GameLook({ grade, kind, className = "", background = null, children }: {
   grade: number | null | undefined;
   kind: "host" | "player" | "compact";
   className?: string;
+  /** The hosting school's own background (Brand settings): shown in place of the look's art, under a dark layer. */
+  background?: string | null;
   children: ReactNode;
 }) {
   const g = lookGrade(grade);
+  const own = kind !== "compact" && background;
   return (
-    <div className={`gl gl-${kind} ${FONTS} ${className}`} data-band={lookBand(g)} data-grade={g}>
-      {kind !== "compact" && <Scene grade={g} tall={kind === "player"} />}
+    <div className={`gl gl-${kind} ${FONTS} ${className}${own ? " has-background" : ""}`} data-band={lookBand(g)} data-grade={g}
+         style={own ? ({ "--gl-background": `url("${background}")` } as CSSProperties) : undefined}>
+      {kind !== "compact" && !own && <Scene grade={g} tall={kind === "player"} />}
+      {own && <div className="gl-school-background" aria-hidden="true" />}
       {children}
     </div>
   );

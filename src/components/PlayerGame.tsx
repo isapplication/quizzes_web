@@ -13,6 +13,10 @@ import { lookBand, lookWords } from "@/lib/gameLook";
 import { type GameSoundName, useGameSound } from "@/lib/gameSound";
 import { connectLive, LiveConnection, LiveMessage, LiveStatus } from "@/lib/live";
 import { OwnerBrandMark, useOwnerBrand } from "@/components/OwnerBrand";
+import { Picture } from "@/components/Picture";
+import { ReactionButtons } from "@/components/live/SlideExtras";
+import { type ShownPicture } from "@/lib/media";
+import { questionSpeech, ReadAloudButton } from "@/lib/readAloud";
 import type { ShownBrand } from "@/lib/me";
 
 interface Question {
@@ -34,6 +38,9 @@ interface Question {
   categorise?: CategoriseShown;
   /** SLIDE: its title (the text is the body). */
   title?: string;
+  /** Wave 2f: the question's picture and each answer's picture (null where an answer has none). */
+  image?: ShownPicture;
+  choiceImages?: (ShownPicture | null)[];
 }
 
 /** How this question is answered, read from {@code pick}, else from its type. */
@@ -121,6 +128,8 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
   const [final, setFinal] = useState<Final | null>(null);
   // The right answer of the question that just closed, so a wrong answer can show it.
   const [closedKey, setClosedKey] = useState<ClosedKey | null>(null);
+  // The reaction this player chose on the slide on screen (part 2g): one each, a new one replaces it.
+  const [reaction, setReaction] = useState<number | null>(null);
   // The question on screen, for the message handler (a slide's closing sends no result to show).
   const shownQuestion = useRef<Question | null>(null);
   const band = lookBand(lookGrade);
@@ -137,6 +146,7 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
       setQuestion(q);
       shownQuestion.current = q;
       setSent(null);
+      setReaction(null);
       setView(pickFor(q) === "none" ? "slide" : "question");
     };
     switch (m.type) {
@@ -145,6 +155,7 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
         setTitle(String(m.quizTitle ?? ""));
         setScore(Number(m.score ?? 0));
         setTeam(Number(m.team ?? 0));
+        setReaction(typeof m.reaction === "number" ? m.reaction : null);
         if (m.question && !m.answered) {
           opened(m.question as unknown as Question);
         } else if (m.question && m.answered) {
@@ -174,6 +185,7 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
         break;
       }
       case "answerAck":
+      case "reactAck":
         if (m.accepted === false && m.message) setMessage(String(m.message));
         break;
       case "result": {
@@ -259,7 +271,7 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
     ? keyText(key.qtype, key.key, question.choices, key.correctIndexes, question.slider?.step ?? 1) : null;
 
   return (
-    <GameLook grade={lookGrade} kind={compact ? "compact" : "player"}>
+    <GameLook grade={lookGrade} kind={compact ? "compact" : "player"} background={brand?.backgroundUrl}>
       <header className="gl-bar">
         {compact ? <span className="brand">{shownName}</span> : <OwnerBrandMark brand={brand} />}
         <span className="gl-spacer" />
@@ -302,19 +314,24 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
             </div>
             {question.timed !== false && !compact && <LastSecondsTicks until={question.closesAt} serverNow={serverNow} tick={() => sound("tick")} />}
             {!compact && (
-              <h1 className="gl-card gl-q">
-                {question.visual && <span className="gl-visual" aria-hidden="true">{question.visual}</span>}{question.text}
-              </h1>
+              <div className="gl-q-with-speaker">
+                <h1 className="gl-card gl-q">
+                  {question.visual && <span className="gl-visual" aria-hidden="true">{question.visual}</span>}{question.text}
+                </h1>
+                <ReadAloudButton text={questionSpeech(question.text, question.choices, question.choiceImages)} />
+              </div>
             )}
+            {!compact && <Picture picture={question.image} className="gl-q-picture" main />}
             {pick === "one" && (
               <div className="gl-tiles gl-in" data-count={question.choices.length}>
                 {question.choices.map((c, i) => (
-                  <GameTile key={i} index={i} text={compact ? "" : c} onClick={() => send({ choice: i }, { shape: i, text: c })} />
+                  <GameTile key={i} index={i} text={compact ? "" : c} picture={compact ? null : question.choiceImages?.[i]}
+                            onClick={() => send({ choice: i }, { shape: i, text: c })} />
                 ))}
               </div>
             )}
             {pick === "many" && (
-              <MultiSelectForm variant="game" choices={question.choices} compact={compact}
+              <MultiSelectForm variant="game" choices={question.choices} compact={compact} pictures={compact ? undefined : question.choiceImages}
                                onSubmit={(choices) => send({ answer: { choices } },
                                  { shape: null, text: choices.map((i) => question.choices[i]).join(", ") })} />
             )}
@@ -343,6 +360,12 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
             <Buddy grade={lookGrade} />
             <div className="gl-big">Look at the screen</div>
             {question.title && <div className="gl-card gl-waiting"><span className="gl-waiting-title">{question.title}</span></div>}
+            {!compact && (
+              <ReactionButtons current={reaction} onReact={(r) => {
+                setReaction(r);
+                live.current?.send({ type: "react", index: question.index, reaction: r });
+              }} />
+            )}
             <div className="gl-sub">Your teacher moves on when everyone has read it.</div>
           </div>
         )}
