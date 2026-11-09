@@ -1,10 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AppFrame } from "@/components/AppFrame";
 import { api, ApiError } from "@/lib/api";
 import { isIndependent, isSchoolAdmin, useMe } from "@/lib/me";
 import { LoadingState, PageHeader } from "@/components/ui/States";
+import { ScoreDelivery } from "@/components/ScoreDelivery";
 
 interface Settings {
   /** This school's id in Quizplayo: the school's system checks it in Quizplayo's requests. */
@@ -211,6 +213,17 @@ function ConnectedSystem() {
           )}
         </section>
       )}
+
+      {s && (
+        <ScoreDelivery path="/api/v1/admin/connected-system/scores" title="Scores sent to your school's system"
+                       description={s.eventsUrl
+                         ? "When a class game or assignment ends, Quizplayo sends each student's score to the events address. A score that fails is tried again a few times on its own."
+                         : "Add an events address above, and Quizplayo sends each student's score there when a class game or assignment ends."} />
+      )}
+
+      <p className="muted" style={{ margin: 0 }}>
+        Using an LMS such as Canvas, Moodle, Schoology or Brightspace? <Link href="/admin/lti">Connect your LMS (LTI 1.3)</Link>.
+      </p>
     </div>
   );
 }

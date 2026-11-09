@@ -1027,3 +1027,29 @@ input[type=email], input[type=tel], input[type=password], input[type=search] {
 .steps-list { margin: 8px 0 0; padding-inline-start: 22px; display: grid; gap: 4px; overflow-wrap: anywhere; }
 .gl-card.steps { text-align: start; max-inline-size: 520px; inline-size: 100%; }
 .try-chip { margin-inline-start: 8px; background: var(--flc); color: var(--sc); }
+/* ---- Wave 3 integrations: share links, score delivery, OneRoster import, LMS (LTI 1.3) ---- */
+.share-links { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; }
+.share-links .btn { white-space: normal; text-align: center; }
+.score-counts { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin: 0; }
+.score-counts > div { border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; background: var(--card); }
+.score-counts dt { color: var(--muted); font-size: 13px; }
+.score-counts dd { margin: 0; font-size: 26px; font-weight: 700; color: var(--sc); font-variant-numeric: tabular-nums; }
+.score-counts .failed { border-color: var(--danger); }
+.score-counts .failed dd { color: var(--danger); }
+.roster-counts table { min-width: 0; width: 100%; }
+.roster-counts td { font-variant-numeric: tabular-nums; }
+.roster-problems { margin: 6px 0 0; padding-inline-start: 20px; max-block-size: 240px; overflow: auto; overflow-wrap: anywhere; }
+.copy-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.copy-list li { display: grid; gap: 4px; min-inline-size: 0; }
+.copy-label { color: var(--muted); font-size: 13px; }
+.copy-value { display: flex; align-items: center; gap: 8px; min-inline-size: 0; }
+.copy-value code { flex: 1; min-inline-size: 0; overflow-wrap: anywhere; padding: 6px 8px; background: var(--page); border: 1px solid var(--border); border-radius: 6px; }
+.copy-value .btn { flex: none; }
+.lti-courses { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.lti-courses li { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; }
+.lti-courses li > div { min-inline-size: 0; flex: 1 1 240px; overflow-wrap: anywhere; }
+.pick-list { border: 0; margin: 0; padding: 0; display: grid; gap: 6px; max-block-size: 420px; overflow: auto; }
+.pick-list label { display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-weight: 400; cursor: pointer; min-block-size: 44px; overflow-wrap: anywhere; }
+.pick-list label:has(input:checked) { border-color: var(--pc); background: var(--plc); }
+.pick-list input { inline-size: 18px; block-size: 18px; margin: 2px 0 0; flex: none; accent-color: var(--pc); }
+.lti-opening { padding-block: 16px; }

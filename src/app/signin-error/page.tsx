@@ -50,6 +50,63 @@ const MESSAGES: Record<string, { title: string; body: string }> = {
     title: "Quizplayo couldn't read this sign-in",
     body: "Open Quizplayo again from your school's system. If it keeps happening, tell your school admin.",
   },
+  school_not_active: {
+    title: "Quizplayo isn't open for your school right now",
+    body: "Your school's Quizplayo is being set up, paused or closed, so nobody can sign in at the moment. Please contact your school.",
+  },
+  too_many: {
+    title: "Too many sign-ins at once",
+    body: "Quizplayo had too many sign-ins from your network in the last minute. Wait a minute, then open Quizplayo again.",
+  },
+  // Opening Quizplayo from an LMS (LTI 1.3).
+  lti_bad_request: {
+    title: "Your LMS sent an incomplete request",
+    body: "Your LMS didn't send everything Quizplayo needs to sign you in. Open Quizplayo from your course again; if it keeps happening, ask your school admin to check the Quizplayo tool in your LMS.",
+  },
+  lti_unknown_platform: {
+    title: "Your school hasn't connected this LMS to Quizplayo",
+    body: "Quizplayo doesn't know this LMS, or its client ID differs from the one saved in Quizplayo. Ask your school admin to check Your LMS in Quizplayo.",
+  },
+  lti_switched_off: {
+    title: "Your school has switched off Quizplayo in its LMS",
+    body: "Your school admin connected your LMS to Quizplayo but it is switched off. Please ask them to switch it on.",
+  },
+  lti_expired: {
+    title: "The sign-in took too long",
+    body: "Opening Quizplayo from your LMS has to finish within a few minutes. Open Quizplayo from your course again.",
+  },
+  lti_invalid_token: {
+    title: "Quizplayo couldn't check this sign-in from your LMS",
+    body: "The sign-in from your LMS didn't pass Quizplayo's checks. Open Quizplayo from your course again; if it keeps happening, ask your school admin to check the key set address in Your LMS.",
+  },
+  lti_wrong_audience: {
+    title: "This sign-in wasn't meant for Quizplayo",
+    body: "Your LMS sent a sign-in for another tool, or with another client ID. Ask your school admin to check the client ID in Your LMS.",
+  },
+  lti_expired_token: {
+    title: "That sign-in from your LMS has expired",
+    body: "Open Quizplayo from your course again. If it keeps happening, the clock on your LMS's server may be wrong: tell your school admin.",
+  },
+  lti_replayed: {
+    title: "That sign-in was already used",
+    body: "For your safety each sign-in from your LMS works once. Open Quizplayo from your course again.",
+  },
+  lti_wrong_deployment: {
+    title: "Quizplayo doesn't know this deployment of your LMS",
+    body: "Your LMS used a deployment ID your school hasn't saved in Quizplayo. Ask your school admin to add it in Your LMS.",
+  },
+  lti_unsupported: {
+    title: "Quizplayo can't open this kind of link",
+    body: "Your LMS asked for something Quizplayo doesn't do (Quizplayo supports LTI 1.3 launches and adding content). Ask your school admin to check the Quizplayo tool in your LMS.",
+  },
+  lti_role: {
+    title: "Your role can't do this",
+    body: "Only teachers can add Quizplayo to a course, and Quizplayo needs your LMS to say whether you are a teacher or a student. Ask your school admin if this looks wrong.",
+  },
+  lti_platform_error: {
+    title: "Your LMS stopped the sign-in",
+    body: "Your LMS answered with an error instead of signing you in. Open Quizplayo from your course again; if it keeps happening, ask your school admin.",
+  },
 };
 
 const FALLBACK = {
@@ -59,9 +116,11 @@ const FALLBACK = {
 
 export default async function SignInError({ searchParams }: { searchParams: Promise<{ reason?: string }> }) {
   const { reason } = await searchParams;
-  const message = (reason && MESSAGES[reason]) || FALLBACK;
-  const actions = [{ label: "Try again", href: "/sign-in", primary: true }];
-  actions.push({ label: "Get help", href: "/help", primary: false });
+  const message = (reason && Object.hasOwn(MESSAGES, reason) && MESSAGES[reason]) || FALLBACK;
+  // From an LMS, "try again" means opening Quizplayo from the course again (each message says so), not Quizplayo's sign-in.
+  const fromLms = !!reason && reason.startsWith("lti_");
+  const actions = fromLms ? [] : [{ label: "Try again", href: "/sign-in", primary: true }];
+  actions.push({ label: "Get help", href: "/help", primary: fromLms });
   return (
     <PublicShell narrow>
       <StatusCard tone="problem" title={message.title} actions={actions}>

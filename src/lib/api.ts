@@ -4,7 +4,8 @@ import { clearTabKey, tabKey } from "./tab";
  * Calls the Quiz API. Same origin (the web app forwards /api). A tab that has its own session key sends it as
  * a Bearer header (see tab.ts); otherwise the httpOnly session cookie goes along. Changes also send the CSRF
  * token from the XSRF-TOKEN cookie. Errors carry the API's
- * human-readable message, which screens show as written. A FormData body is sent as a file upload.
+ * human-readable message, which screens show as written. A FormData body is sent as a file upload; a Blob or File
+ * body (a zip, say) is sent as its raw bytes with its own type ({@code application/zip} when it has none).
  */
 export class ApiError extends Error {
   constructor(
@@ -26,9 +27,11 @@ export async function api<T>(path: string, init: { method?: string; body?: unkno
   const method = init.method ?? "GET";
   const headers: Record<string, string> = { Accept: "application/json" };
   const form = init.body instanceof FormData;
+  const blob = typeof Blob !== "undefined" && init.body instanceof Blob;
   const key = tabKey();
   if (key) headers.Authorization = "Bearer " + key;
-  if (init.body !== undefined && !form) headers["Content-Type"] = "application/json";
+  if (blob) headers["Content-Type"] = (init.body as Blob).type || "application/zip";
+  else if (init.body !== undefined && !form) headers["Content-Type"] = "application/json";
   if (method !== "GET") {
     if (!xsrfToken()) await fetch("/api/v1/me", { credentials: "same-origin" }).catch(() => undefined);
     const token = xsrfToken();
@@ -40,7 +43,8 @@ export async function api<T>(path: string, init: { method?: string; body?: unkno
       method,
       headers,
       credentials: "same-origin",
-      body: init.body === undefined ? undefined : form ? (init.body as FormData) : JSON.stringify(init.body),
+      body: init.body === undefined ? undefined
+        : form ? (init.body as FormData) : blob ? (init.body as Blob) : JSON.stringify(init.body),
     });
   } catch {
     throw new ApiError(0, "offline", "Quizplayo cannot reach its server. Check your internet connection and try again.");

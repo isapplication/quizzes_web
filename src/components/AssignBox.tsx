@@ -5,6 +5,7 @@ import { useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { AssignmentSummary, dueText } from "@/lib/assignments";
 import { isIndependent, useMe } from "@/lib/me";
+import { ShareLinks } from "@/components/ShareLinks";
 import type { HostTarget } from "@/components/HostGame";
 
 /**
@@ -68,6 +69,7 @@ export function AssignBox({ target }: { target: HostTarget }) {
                  onFocus={(e) => e.target.select()} />
           <button type="button" className="btn btn-primary" onClick={copy}>{copied ? "Copied" : "Copy link"}</button>
         </div>
+        <ShareLinks link={made.link} />
         <p style={{ margin: 0 }}>
           <Link href={"/teacher/assignments/" + made.assignmentId}>See who has done it</Link> ·{" "}
           <button type="button" className="btn-inline" onClick={() => { setMade(null); setCopied(false); }}>Assign it again</button>

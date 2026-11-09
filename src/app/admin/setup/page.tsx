@@ -190,6 +190,8 @@ function SchoolSetup() {
               <dd>{setup.signIn.schoolPage ? <a href={setup.signIn.schoolPage}>{setup.signIn.schoolPage}</a> : "Save a school code first."}</dd>
               <dt>Your school&apos;s own system</dt>
               <dd><a href="/admin/connected-system">{setup.people.fromPortal ? "Connected: see its settings" : "Connect it (optional)"}</a></dd>
+              <dt>Your LMS (LTI 1.3)</dt>
+              <dd><a href="/admin/lti">Connect it (optional)</a></dd>
             </dl>
             <EmailDomainsSetting />
           </div>
