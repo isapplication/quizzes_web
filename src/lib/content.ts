@@ -30,6 +30,8 @@ export interface QuestionView {
   timeLimitSeconds: number;
   choices: string[];
   correctIndex: number;
+  /** Every right choice: a multi-select's several, the one of a quiz or true/false; none for a poll. */
+  correctIndexes?: number[];
   explanation: string | null;
   visual: string | null;
   answer: Record<string, unknown>;

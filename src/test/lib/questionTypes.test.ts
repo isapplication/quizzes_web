@@ -34,7 +34,7 @@ describe("fromServer", () => {
   it("reads CATEGORISE payload with categories and items", () => {
     const e = fromServer({
       type: "CATEGORISE", text: "Sort these",
-      payload: { categories: ["A", "B"], catItems: [{ text: "x", category: 0 }, { text: "y", category: 1 }] },
+      payload: { categoryLabels: ["A", "B"], items: ["x", "y"], correctCategory: { "0": 0, "1": 1 } },
     });
     expect(e.type).toBe("CATEGORISE");
     expect(e.payload.categories).toEqual(["A", "B"]);
@@ -66,9 +66,20 @@ describe("toServer", () => {
     expect(wire.choices).toEqual([]);
     expect(wire.correctIndexes).toEqual([]);
     expect(wire.payload).toEqual({
-      categories: ["Animals", "Plants"],
-      catItems: [{ text: "Dog", category: 0 }, { text: "Rose", category: 1 }],
+      categoryLabels: ["Animals", "Plants"],
+      items: ["Dog", "Rose"],
+      correctCategory: { "0": 0, "1": 1 },
     });
+  });
+
+  it("round-trips a CATEGORISE question through the API's shape, leaving an unassigned item unsorted", () => {
+    const wire = toServer(q("CATEGORISE", {
+      payload: { categories: ["Animals", "Plants"], catItems: [{ text: "Dog", category: 0 }, { text: "Rose", category: 5 }] },
+    }));
+    expect(wire.payload).toEqual({ categoryLabels: ["Animals", "Plants"], items: ["Dog", "Rose"], correctCategory: { "0": 0 } });
+    const back = fromServer({ type: "CATEGORISE", text: "Sort", payload: wire.payload });
+    expect(back.payload.categories).toEqual(["Animals", "Plants"]);
+    expect(back.payload.catItems).toEqual([{ text: "Dog", category: 0 }, { text: "Rose", category: 0 }]);
   });
 
   it("sends each type's payload and no choices where there are none", () => {

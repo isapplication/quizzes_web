@@ -7,7 +7,7 @@ import { ActivityRound } from "@/components/ActivityRound";
 import { AnswerTile } from "@/components/Stage";
 import { OwnerBrandMark, useOwnerBrand } from "@/components/OwnerBrand";
 import { api, ApiError } from "@/lib/api";
-import { MultiSelectForm, SliderForm, TypeAnswerForm } from "@/components/AnswerInputs";
+import { CategoriseForm, MultiSelectForm, SliderForm, TypeAnswerForm } from "@/components/AnswerInputs";
 import { ACTIVITY_TYPES, ActivityAnswer, Answered, dueText, PlayInfo, PlayState, type TypedAnswer, typedAnswer } from "@/lib/assignments";
 import { keyText, outcomeOf, pickOf } from "@/lib/questionTypes";
 import { LoadingState } from "@/components/ui/States";
@@ -119,7 +119,8 @@ export default function AssignmentPage() {
   const pick = q ? q.pick ?? pickOf(q.type) : "one";
   const outcome = feedback ? outcomeOf({ answered: true, correct: feedback.correct, fraction: feedback.fraction, counted: feedback.counted }) : null;
   const rightChoices = feedback ? feedback.correctIndexes ?? (feedback.correctIndex >= 0 ? [feedback.correctIndex] : []) : [];
-  const answerWords = feedback && q && (outcome === "wrong" || outcome === "partial") && (pick === "text" || pick === "number" || pick === "many")
+  const answerWords = feedback && q && (outcome === "wrong" || outcome === "partial")
+    && (pick === "text" || pick === "number" || pick === "many" || pick === "categorise")
     ? keyText(q.type, feedback.key, q.choices, rightChoices, q.slider?.step ?? 1) : null;
   // A puzzle is a question like any other in a quiz (Wave 1b); matching and flashcards stay activity rounds.
   const step = q?.type === "CARD" ? "Card" : activity && q?.type !== "PUZZLE" ? "Round" : "Question";
@@ -240,6 +241,10 @@ export default function AssignmentPage() {
             {pick === "text" && <TypeAnswerForm key={q.index} variant="stage" busy={busy} onSubmit={(t) => answer(typedAnswer.text(t))} />}
             {pick === "number" && q.slider && (
               <SliderForm key={q.index} variant="stage" slider={q.slider} busy={busy} onSubmit={(v) => answer(typedAnswer.value(v))} />
+            )}
+            {pick === "categorise" && q.categorise && (
+              <CategoriseForm key={q.index} variant="stage" data={q.categorise} busy={busy}
+                              onSubmit={(c) => answer(typedAnswer.categories(c))} />
             )}
           </>
         )}

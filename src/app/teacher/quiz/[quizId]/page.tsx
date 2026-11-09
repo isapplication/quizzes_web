@@ -9,6 +9,7 @@ import { AssignBox } from "@/components/AssignBox";
 import { HostGame } from "@/components/HostGame";
 import { api, ApiError } from "@/lib/api";
 import { gradeLabel, QuizView, TYPE_LABEL } from "@/lib/content";
+import { type AnswerKey, keyText } from "@/lib/questionTypes";
 import { isSchoolAdmin, useMe } from "@/lib/me";
 import { LoadingState, PageHeader } from "@/components/ui/States";
 
@@ -91,7 +92,9 @@ function Quiz() {
       {error && <div className="alert alert-danger" role="alert">{error}</div>}
 
       <ol className="question-list">
-        {view.questions.map((question) => (
+        {view.questions.map((question) => {
+          const right = question.correctIndexes ?? (question.correctIndex >= 0 ? [question.correctIndex] : []);
+          return (
           <li key={question.id} className="card">
             <div className="row">
               <span className="chip">{TYPE_LABEL[question.type]}</span>
@@ -102,26 +105,30 @@ function Quiz() {
             {question.choices.length > 0 && (
               <ul className="choice-list">
                 {question.choices.map((c, i) => (
-                  <li key={i} className={i === question.correctIndex ? "correct" : ""}>
+                  <li key={i} className={right.includes(i) ? "correct" : ""}>
                     <AnswerShape index={i} size={16} />
                     <span>{c}</span>
-                    {i === question.correctIndex && <strong className="correct-label">✓ Correct</strong>}
+                    {right.includes(i) && <strong className="correct-label">✓ Correct</strong>}
                   </li>
                 ))}
               </ul>
             )}
-            {question.type !== "QUIZ" && question.type !== "TRUE_FALSE" && (
-              <p className="muted">Answer: {describeAnswer(question.answer)}</p>
+            {question.type === "POLL" && <p className="muted">A poll has no right answer.</p>}
+            {question.type !== "QUIZ" && question.type !== "TRUE_FALSE" && question.type !== "MULTI_SELECT"
+              && question.type !== "POLL" && question.type !== "SLIDE" && (
+              <p className="muted">Answer: {describeAnswer(question.type, question.answer)}</p>
             )}
             {question.explanation && <p className="muted">{question.explanation}</p>}
           </li>
-        ))}
+          );
+        })}
       </ol>
     </div>
   );
 }
 
-function describeAnswer(answer: Record<string, unknown>): string {
+function describeAnswer(type: string, answer: Record<string, unknown>): string {
+  if (type === "CATEGORISE") return keyText(type, answer as AnswerKey, [], []) ?? "–";
   if (Array.isArray(answer.accept)) return (answer.accept as string[]).join(" or ");
   if (Array.isArray(answer.order)) return (answer.order as string[]).join(" → ");
   if (answer.answer !== undefined) return `${answer.answer} ${answer.unit ?? ""} (±${answer.tol})`;

@@ -93,6 +93,8 @@ export interface PlayQuestion {
   pick?: Pick;
   slider?: { min: number; max: number; step: number; unit?: string } | null;
   title?: string | null;
+  /** CATEGORISE: the categories and the items shuffled; answered by the items' shown places. */
+  categorise?: { categories: string[]; items: string[] } | null;
 }
 
 export interface PlayState {
@@ -143,12 +145,15 @@ export type TypedAnswer =
   | { choices: number[]; answer: { choices: number[] } }
   | { text: string; answer: { text: string } }
   | { value: number; answer: { value: number } }
+  | { answer: { categories: Record<number, number> } }
   | { answer: Record<string, never> };
 
 export const typedAnswer = {
   choices: (choices: number[]): TypedAnswer => ({ choices, answer: { choices } }),
   text: (text: string): TypedAnswer => ({ text, answer: { text } }),
   value: (value: number): TypedAnswer => ({ value, answer: { value } }),
+  /** A categorise question: each item's shown place to the category it was put in (only nested: it has no flat form). */
+  categories: (categories: Record<number, number>): TypedAnswer => ({ answer: { categories } }),
   /** A slide: nothing to answer, Continue moves the attempt on. */
   seen: (): TypedAnswer => ({ answer: {} }),
 };

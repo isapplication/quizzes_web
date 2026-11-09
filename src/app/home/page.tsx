@@ -82,8 +82,10 @@ function TeacherHome() {
                       <Link className="btn btn-primary" href="/teacher/quiz/new">Create a quiz</Link>
                     </div>
                   } />
-      <TemplateSelector grade={me.grade ?? (grades[0] ?? 5)} open={showTemplates} onClose={() => setShowTemplates(false)}
-                        onSelect={(quiz) => { setShowTemplates(false); router.push("/teacher/quiz/new?template=" + encodeURIComponent(JSON.stringify(quiz))); }} />
+      {showTemplates && (
+        <TemplateSelector grade={me.grade ?? (grades[0] ?? 5)} onClose={() => setShowTemplates(false)}
+                          onLaunched={(quizId) => router.push("/teacher/quiz/" + quizId + "/edit")} />
+      )}
       {(firstVisit || changing) && (
         <FirstVisit school={!isIndependent(me)} current={grades} changing={changing}
                     onDone={(g) => { setGrades(g); setChanging(false); }} onCancel={() => setChanging(false)} />

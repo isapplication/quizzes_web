@@ -165,11 +165,13 @@ export function fromServer(raw: Record<string, unknown>): EditorQuestion {
       unit: typeof p.unit === "string" ? p.unit : "" });
   }
   if (type === "CATEGORISE") {
-    payload.categories = Array.isArray(p.categories) ? (p.categories as unknown[]).map(String) : ["", ""];
-    payload.catItems = Array.isArray(p.catItems)
-      ? (p.catItems as { text?: unknown; category?: unknown }[]).map((it) => ({
-          text: typeof it.text === "string" ? it.text : "",
-          category: typeof it.category === "number" ? it.category : 0,
+    // The API's shape (wave1c-contract.md): categoryLabels, items, and correctCategory from item index to category.
+    payload.categories = Array.isArray(p.categoryLabels) ? (p.categoryLabels as unknown[]).map(String) : ["", ""];
+    const key = (p.correctCategory && typeof p.correctCategory === "object" ? p.correctCategory : {}) as Record<string, unknown>;
+    payload.catItems = Array.isArray(p.items)
+      ? (p.items as unknown[]).map((text, i) => ({
+          text: String(text),
+          category: typeof key[String(i)] === "number" ? (key[String(i)] as number) : 0,
         }))
       : [{ text: "", category: 0 }, { text: "", category: 0 }];
   }
@@ -236,10 +238,13 @@ export function toServer(q: EditorQuestion) {
       const cp = q.payload;
       choices = [];
       correctIndexes = [];
-      payload = {
-        categories: (cp.categories ?? []).map((c) => c.trim()),
-        catItems: (cp.catItems ?? []).filter((it) => it.text.trim()).map((it) => ({ text: it.text.trim(), category: it.category })),
-      };
+      const labels = (cp.categories ?? []).map((c) => c.trim());
+      const items = (cp.catItems ?? []).filter((it) => it.text.trim());
+      const correctCategory: Record<string, number> = {};
+      items.forEach((it, i) => {
+        if (it.category >= 0 && it.category < labels.length) correctCategory[String(i)] = it.category;
+      });
+      payload = { categoryLabels: labels, items: items.map((it) => it.text.trim()), correctCategory };
       break;
     }
     case "POLL":

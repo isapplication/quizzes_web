@@ -908,8 +908,7 @@ input[type=email], input[type=tel], input[type=password], input[type=search] {
 .gl-cat-item { display: inline-block; padding: 3px 10px; border-radius: 12px; background: var(--sc-light, var(--card)); font-size: 13px; }
 .cat-result-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 10px; }
 .cat-result-col { display: flex; flex-direction: column; gap: 4px; }
-.modal-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.4); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 16px; }
-.modal-dialog { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; max-width: 560px; width: 100%; max-height: 90vh; overflow-y: auto; display: grid; gap: 14px; }
+.template-dialog { inline-size: min(640px, calc(100vw - 32px)); }
 .template-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
 .template-card { text-align: left; cursor: pointer; transition: box-shadow 0.12s; border: 1.5px solid var(--border); }
 .template-card:hover { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08); }

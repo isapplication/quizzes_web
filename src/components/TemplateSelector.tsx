@@ -1,76 +1,106 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 
+/** One quick-launch template for a grade band, as the API lists it. */
 interface Template {
-  code: string;
-  name: string;
-  description: string;
-  questionCount: number;
+  templateCode: string;
+  templateName: string;
+  description: string | null;
+  presetQuestions: unknown[];
 }
 
-const TEMPLATES: Template[] = [
-  { code: "exit-ticket", name: "Exit Ticket", description: "3 quick questions to check what students learned today.", questionCount: 3 },
-  { code: "warm-up", name: "Warm-Up", description: "A short review of yesterday's topic to get the class started.", questionCount: 3 },
-  { code: "quick-check", name: "Quick Check", description: "5 questions on the current unit, mixed types.", questionCount: 5 },
-  { code: "reflection", name: "Reflection", description: "Students think about what they learned and what was hard.", questionCount: 4 },
-];
+/** The grade band a grade's templates are written for. */
+export function bandOf(grade: number): string {
+  return grade <= 2 ? "K-2" : grade <= 5 ? "3-5" : grade <= 8 ? "6-8" : "9-12";
+}
 
-interface TemplateSelectorProps {
+/**
+ * Quick Launch in a native modal dialog: the templates for the teacher's grade band; picking one makes a new draft
+ * quiz of their own from it (POST /api/v1/templates/{code}/launch) and hands its id to {@code onLaunched}.
+ * Mount it to open it; it calls {@code onClose} however it is closed.
+ */
+export function TemplateSelector({ grade, onClose, onLaunched }: {
   grade: number;
-  open: boolean;
   onClose: () => void;
-  onSelect: (quiz: { title: string; questions: unknown[] }) => void;
-}
-
-export function TemplateSelector({ grade, open, onClose, onSelect }: TemplateSelectorProps) {
-  const [loading, setLoading] = useState<string | null>(null);
+  onLaunched: (quizId: string) => void;
+}) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+  const [templates, setTemplates] = useState<Template[] | null>(null);
+  const [launching, setLaunching] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const band = bandOf(grade);
 
   useEffect(() => {
-    if (!open) { setError(null); setLoading(null); }
-  }, [open]);
+    const d = dialog.current;
+    d?.showModal();
+    // Click-outside closes it where the browser has no closedby (Safari): pressed and released on the backdrop.
+    if (!d || "closedBy" in HTMLDialogElement.prototype) return;
+    const outside = (e: PointerEvent) => {
+      const r = d.getBoundingClientRect();
+      return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+    };
+    let pressedOutside = false;
+    const down = (e: PointerEvent) => { pressedOutside = outside(e); };
+    const up = (e: PointerEvent) => { if (pressedOutside && outside(e)) d.close(); };
+    d.addEventListener("pointerdown", down);
+    d.addEventListener("pointerup", up);
+    return () => { d.removeEventListener("pointerdown", down); d.removeEventListener("pointerup", up); };
+  }, []);
 
-  async function pick(template: Template) {
-    setLoading(template.code);
+  useEffect(() => {
+    api<Template[]>("/api/v1/templates?grade=" + encodeURIComponent(band))
+      .then(setTemplates)
+      .catch((e: unknown) => setError(e instanceof ApiError ? e.message : "Quizplayo could not load the templates. Close this and try again."));
+  }, [band]);
+
+  async function launch(t: Template) {
+    setLaunching(t.templateCode);
     setError(null);
-    const band = grade <= 2 ? "K-2" : grade <= 5 ? "3-5" : grade <= 8 ? "6-8" : "9-12";
     try {
-      const quiz = await api<{ title: string; questions: unknown[] }>(`/api/templates/${template.code}?grade=${encodeURIComponent(band)}`);
-      onSelect(quiz);
+      const made = await api<{ quizId: string }>("/api/v1/templates/" + encodeURIComponent(t.templateCode) + "/launch",
+        { method: "POST", body: { grade } });
+      onLaunched(made.quizId);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Could not load the template. Please try again.");
-      setLoading(null);
+      setError(e instanceof ApiError ? e.message : "Quizplayo could not make a quiz from this template. Try again.");
+      setLaunching(null);
     }
   }
 
-  if (!open) return null;
-
   return (
-    <div className="modal-backdrop" onClick={onClose} role="presentation">
-      <dialog className="modal-dialog template-modal" open aria-label="Quick-launch templates"
-              onClick={(e) => e.stopPropagation()}>
-        <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
-          <h2 style={{ margin: 0 }}>Quick Launch</h2>
-          <button type="button" className="btn btn-light" onClick={onClose} aria-label="Close">×</button>
-        </div>
-        <p className="muted" style={{ margin: "4px 0 0" }}>
-          Pick a template and we&apos;ll pre-fill a quiz for your grade. You can edit it before publishing.
+    <dialog ref={dialog} className="email-dialog template-dialog" aria-labelledby={titleId} onClose={onClose}
+            {...({ closedby: "any" } as Record<string, string>)}>
+      <div className="stack">
+        <h2 id={titleId} style={{ margin: 0 }}>Quick Launch</h2>
+        <p className="muted" style={{ margin: 0 }}>
+          Pick a template for grades {band}. Quizplayo makes it a new quiz of yours; fill in the answers, then publish.
         </p>
         {error && <div className="alert alert-danger" role="alert">{error}</div>}
-        <div className="template-grid">
-          {TEMPLATES.map((t) => (
-            <button key={t.code} type="button" className="card template-card"
-                    disabled={loading !== null} onClick={() => pick(t)}>
-              <h3>{t.name}</h3>
-              <p className="muted">{t.description}</p>
-              <span className="chip">{t.questionCount} questions</span>
-              {loading === t.code && <span className="muted">Loading…</span>}
-            </button>
-          ))}
+        {!templates && !error && <p className="muted">Loading the templates…</p>}
+        {templates && templates.length === 0 && <p className="muted">There are no templates for grades {band} yet.</p>}
+        {templates && templates.length > 0 && (
+          <div className="template-grid">
+            {templates.map((t) => (
+              <button key={t.templateCode} type="button" className="card template-card"
+                      disabled={launching !== null} onClick={() => launch(t)}>
+                <h3>{t.templateName}</h3>
+                {t.description && <p className="muted">{t.description}</p>}
+                <span className="chip">
+                  {launching === t.templateCode ? "Making your quiz…"
+                    : t.presetQuestions.length + (t.presetQuestions.length === 1 ? " question" : " questions")}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="row" style={{ justifyContent: "flex-end" }}>
+          <form method="dialog">
+            <button type="submit" className="btn btn-light" autoFocus>Close</button>
+          </form>
         </div>
-      </dialog>
-    </div>
+      </div>
+    </dialog>
   );
 }
