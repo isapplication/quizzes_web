@@ -7,6 +7,7 @@ import { QuestionResult } from "@/components/QuestionResult";
 import { api, ApiError } from "@/lib/api";
 import { AssignmentResults, AssignmentSummary, dueText, rightText } from "@/lib/assignments";
 import { EmptyState, ErrorState, LoadingState, PageHeader } from "@/components/ui/States";
+import { ShareLinks } from "@/components/ShareLinks";
 
 export default function AssignmentResultsRoute() {
   return (
@@ -66,6 +67,7 @@ function Results() {
                onFocus={(e) => e.target.select()} />
         <button type="button" className="btn btn-light" onClick={() => copy(a.link)}>{copied ? "Copied" : "Copy link"}</button>
       </div>
+      {a.open && <ShareLinks link={a.link} />}
       <div className="report-cards">
         <div className="card"><span className="muted">Started</span><strong>{results.attempts.length}</strong></div>
         <div className="card"><span className="muted">Finished</span><strong>{done}</strong></div>

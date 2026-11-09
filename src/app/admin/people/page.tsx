@@ -142,6 +142,8 @@ function People() {
         <ImportCsv onSaved={(newLogins) => { setChanged((n) => n + 1); if (newLogins.length) setLogins(newLogins); }} />
       </div>
 
+      <OneRosterImport onApplied={() => setChanged((n) => n + 1)} />
+
       <JoinRequests changed={changed} onDecided={() => setChanged((n) => n + 1)} />
       <Invitations changed={changed} onChanged={() => setChanged((n) => n + 1)} />
 
@@ -384,6 +386,188 @@ function ImportCsv({ onSaved }: { onSaved: (logins: Login[]) => void }) {
         <button className="btn btn-primary" type="button" disabled={busy || !csv || !result || result.saved || result.problems > 0}
                 onClick={() => send(true)}>
           {busy ? "Working…" : result && !result.saved && result.problems === 0 ? `Add ${result.rows.length} people` : "Add people"}
+        </button>
+      </div>
+    </section>
+  );
+}
+
+interface RosterCounts {
+  add: number;
+  change: number;
+  switchOff: number;
+  unchanged: number;
+}
+
+interface RosterPreview {
+  previewId: string;
+  people: RosterCounts;
+  classes: RosterCounts;
+  enrollments: number;
+  skippedRoles: number;
+  problems: { file: string; line: number; message: string }[];
+  problemCount: number;
+  needsConfirm: string | null;
+}
+
+interface RosterApplied {
+  added: number;
+  changed: number;
+  switchedOff: number;
+  classesAdded: number;
+  classesChanged: number;
+  memberships: number;
+}
+
+const MAX_ZIP_BYTES = 20 * 1024 * 1024;
+
+function plural(n: number, one: string, many: string): string {
+  return n + " " + (n === 1 ? one : many);
+}
+
+/**
+ * A OneRoster 1.1 export (a zip of CSV files) from the school's information system: first a preview (counts and every
+ * problem, nothing changed), then "Apply". The zip goes to the API as it is, not as a form upload. A preview lasts
+ * 30 minutes. If applying would switch off many people, the API stops and says why; the admin may apply anyway.
+ */
+function OneRosterImport({ onApplied }: { onApplied: () => void }) {
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<RosterPreview | null>(null);
+  const [applied, setApplied] = useState<RosterApplied | null>(null);
+  const [busy, setBusy] = useState<"preview" | "apply" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [needsConfirm, setNeedsConfirm] = useState(false);
+
+  function pick(f: File | undefined) {
+    setPreview(null);
+    setApplied(null);
+    setError(null);
+    setNeedsConfirm(false);
+    setFile(null);
+    if (!f) return;
+    if (!f.name.toLowerCase().endsWith(".zip")) {
+      setError("Choose the .zip file your school's information system exported (OneRoster 1.1, CSV).");
+      return;
+    }
+    if (f.size > MAX_ZIP_BYTES) {
+      setError("This zip is larger than 20 MB. Export only this school, or ask Quizplayo support to raise the limit.");
+      return;
+    }
+    if (f.size === 0) {
+      setError("This zip is empty. Export it again from your school's information system.");
+      return;
+    }
+    setFile(f);
+  }
+
+  async function check() {
+    if (!file) return;
+    setBusy("preview");
+    setError(null);
+    setNeedsConfirm(false);
+    setApplied(null);
+    try {
+      setPreview(await api<RosterPreview>("/api/v1/admin/people/oneroster", { method: "POST", body: file }));
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Quizplayo could not read this zip.");
+    }
+    setBusy(null);
+  }
+
+  async function apply(confirm: boolean) {
+    if (!preview) return;
+    setBusy("apply");
+    setError(null);
+    setNeedsConfirm(false);
+    try {
+      const r = await api<RosterApplied>(
+        `/api/v1/admin/people/oneroster/${encodeURIComponent(preview.previewId)}/apply?confirm=${confirm}`, { method: "POST" });
+      setApplied(r);
+      setPreview(null);
+      setFile(null);
+      onApplied();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Quizplayo could not apply this import.");
+      setNeedsConfirm(e instanceof ApiError && e.code === "oneroster_needs_confirm");
+      if (e instanceof ApiError && e.code === "preview_expired") setPreview(null);
+    }
+    setBusy(null);
+  }
+
+  const p = preview;
+  return (
+    <section className="card stack" aria-labelledby="oneroster">
+      <h2 id="oneroster" style={{ margin: 0 }}>Import from OneRoster</h2>
+      <p className="muted" style={{ margin: 0 }}>
+        Export people, classes and enrollments from your school&apos;s information system as a OneRoster 1.1 zip (CSV, up to 20 MB).
+        Quizplayo shows what would change first; nothing changes until you choose Apply.
+      </p>
+      <label className="file-drop">
+        <input type="file" accept=".zip,application/zip,application/x-zip-compressed" aria-describedby="oneroster-hint"
+               onChange={(e) => { pick(e.target.files?.[0]); e.currentTarget.value = ""; }} />
+        <span>{file ? file.name : "Choose a OneRoster .zip file"}</span>
+      </label>
+      <p id="oneroster-hint" className="hint" style={{ margin: 0 }}>A .zip file of at most 20 MB.</p>
+
+      {error && (
+        <div className="alert alert-danger" role="alert">
+          {error}
+          {needsConfirm && preview && (
+            <div className="row" style={{ marginTop: 8 }}>
+              <button type="button" className="btn btn-light" disabled={busy !== null} onClick={() => apply(true)}>
+                {busy === "apply" ? "Applying…" : "Apply anyway"}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {applied && (
+        <div className="alert alert-success" role="status">
+          Imported: {plural(applied.added, "person", "people")} added, {applied.changed} changed, {applied.switchedOff} switched off;{" "}
+          {plural(applied.classesAdded, "class", "classes")} added, {applied.classesChanged} changed;{" "}
+          {plural(applied.memberships, "class place", "class places")}.
+        </div>
+      )}
+
+      {p && (
+        <div className="stack" aria-live="polite">
+          {p.needsConfirm && <div className="alert alert-warning">{p.needsConfirm}</div>}
+          <div className="table-scroll roster-counts" tabIndex={0} role="region" aria-labelledby="oneroster-counts">
+            <table>
+              <caption id="oneroster-counts" className="sr-only">What the import would change</caption>
+              <thead>
+                <tr><th scope="col" /><th scope="col">Add</th><th scope="col">Change</th><th scope="col">Switch off</th><th scope="col">Unchanged</th></tr>
+              </thead>
+              <tbody>
+                <tr><th scope="row">People</th><td>{p.people.add}</td><td>{p.people.change}</td><td>{p.people.switchOff}</td><td>{p.people.unchanged}</td></tr>
+                <tr><th scope="row">Classes</th><td>{p.classes.add}</td><td>{p.classes.change}</td><td>{p.classes.switchOff}</td><td>{p.classes.unchanged}</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p style={{ margin: 0 }}>
+            {plural(p.enrollments, "class place", "class places")}
+            {p.skippedRoles > 0 && <> · {plural(p.skippedRoles, "guardian or other role", "guardians or other roles")} not imported</>}
+          </p>
+          {p.problemCount > 0 && (
+            <div className="alert alert-warning">
+              <strong>{plural(p.problemCount, "row was", "rows were")} skipped:</strong>
+              <ul className="roster-problems">
+                {p.problems.map((x, i) => <li key={i}>{x.file} line {x.line}: {x.message}</li>)}
+              </ul>
+              {p.problemCount > p.problems.length && <p style={{ margin: 0 }}>and {p.problemCount - p.problems.length} more</p>}
+            </div>
+          )}
+          <p className="hint" style={{ margin: 0 }}>This preview lasts 30 minutes. After that, check the file again.</p>
+        </div>
+      )}
+
+      <div className="row">
+        <button type="button" className="btn btn-light" disabled={busy !== null || !file} onClick={check}>
+          {busy === "preview" ? "Checking…" : "Check the file"}
+        </button>
+        <button type="button" className="btn btn-primary" disabled={busy !== null || !p} onClick={() => apply(false)}>
+          {busy === "apply" ? "Applying…" : "Apply"}
         </button>
       </div>
     </section>
