@@ -10,6 +10,8 @@ import { HostGame } from "@/components/HostGame";
 import { api, ApiError } from "@/lib/api";
 import { gradeLabel, QuizView, TYPE_LABEL } from "@/lib/content";
 import { type AnswerKey, keyText } from "@/lib/questionTypes";
+import { Picture } from "@/components/Picture";
+import { shown } from "@/lib/media";
 import { isSchoolAdmin, useMe } from "@/lib/me";
 import { LoadingState, PageHeader } from "@/components/ui/States";
 
@@ -102,11 +104,13 @@ function Quiz() {
               {!question.playableLive && <span className="chip chip-new">Not in live games yet</span>}
             </div>
             <p style={{ fontWeight: 600, margin: "8px 0" }}>{question.text}</p>
+            <Picture picture={shown(question.image)} className="quiz-q-picture" />
             {question.choices.length > 0 && (
               <ul className="choice-list">
                 {question.choices.map((c, i) => (
                   <li key={i} className={right.includes(i) ? "correct" : ""}>
                     <AnswerShape index={i} size={16} />
+                    <Picture picture={shown(question.choiceImages?.[i])} className="quiz-choice-picture" />
                     <span>{c}</span>
                     {right.includes(i) && <strong className="correct-label">✓ Correct</strong>}
                   </li>

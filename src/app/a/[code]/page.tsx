@@ -11,7 +11,10 @@ import { CategoriseForm, FreeTextForm, IdeasForm, MultiSelectForm, ScaleForm, Sl
 import { ACTIVITY_TYPES, ActivityAnswer, Answered, dueText, PlayInfo, PlayState, type TypedAnswer, typedAnswer } from "@/lib/assignments";
 import { keyText, outcomeOf, pickOf } from "@/lib/questionTypes";
 import { LoadingState } from "@/components/ui/States";
-import { PinForm, QuestionImageView } from "@/components/ImageQuestion";
+import { PinForm } from "@/components/ImageQuestion";
+import { Picture } from "@/components/Picture";
+import { SlideMedia } from "@/components/live/SlideExtras";
+import { questionSpeech, ReadAloudButton } from "@/lib/readAloud";
 
 /** This device's key for the attempt at one assignment, kept so a reload carries on. */
 function keyName(code: string) {
@@ -214,6 +217,7 @@ export default function AssignmentPage() {
             <article className="assignment-slide">
               <h1>{q.title}</h1>
               {q.text && <p>{q.text}</p>}
+              <SlideMedia picture={q.image} video={q.video} title={q.title ?? "Slide"} />
             </article>
             <div className="row" style={{ justifyContent: "center" }}>
               <button type="button" className="btn btn-primary" style={{ fontSize: 20 }} disabled={busy} onClick={() => answer(typedAnswer.seen())} autoFocus>
@@ -230,17 +234,20 @@ export default function AssignmentPage() {
               <span>{state.correct} right so far</span>
             </div>
             {q.visual && <span className="question-visual-big" aria-hidden="true">{q.visual}</span>}
-            <div className="question-text">{q.text}</div>
+            <div className="question-text-row">
+              <div className="question-text">{q.text}</div>
+              <ReadAloudButton text={questionSpeech(q.text, q.choices, q.choiceImages)} />
+            </div>
+            {pick !== "point" && <Picture picture={q.image} className="stage-q-picture" main />}
             {pick === "one" && (
               <div className="answer-grid">
-                {q.choices.map((c, i) => <AnswerTile key={i} index={i} text={c} disabled={busy} onClick={() => answer({ choice: i })} />)}
+                {q.choices.map((c, i) => <AnswerTile key={i} index={i} text={c} picture={q.choiceImages?.[i]} disabled={busy} onClick={() => answer({ choice: i })} />)}
               </div>
             )}
             {pick === "many" && (
-              <MultiSelectForm key={q.index} variant="stage" choices={q.choices} busy={busy} onSubmit={(c) => answer(typedAnswer.choices(c))} />
+              <MultiSelectForm key={q.index} variant="stage" choices={q.choices} pictures={q.choiceImages ?? undefined} busy={busy} onSubmit={(c) => answer(typedAnswer.choices(c))} />
             )}
             {pick === "text" && <TypeAnswerForm key={q.index} variant="stage" busy={busy} onSubmit={(t) => answer(typedAnswer.text(t))} />}
-            {q.image && pick !== "point" && <QuestionImageView image={q.image} />}
             {pick === "point" && q.image && (
               <PinForm key={q.index} variant="stage" image={q.image} busy={busy} onSubmit={(point) => answer(typedAnswer.point(point))} />
             )}
@@ -274,11 +281,12 @@ export default function AssignmentPage() {
               {answerWords && <div style={{ fontSize: 18, fontWeight: 400 }}>The answer: {answerWords}</div>}
             </div>
             <div className="question-text">{q.text}</div>
+            <Picture picture={q.image} className="stage-q-picture" />
             {(pick === "one" || pick === "many") && (
               <div className="answer-grid">
                 {q.choices.map((c, i) => (
                   // The right answers are marked (none in a poll); the student's own choices stay visible; the rest fade.
-                  <AnswerTile key={i} index={i} text={c}
+                  <AnswerTile key={i} index={i} text={c} picture={q.choiceImages?.[i]}
                               state={rightChoices.includes(i) && outcome !== "vote" ? "correct" : feedback.chosen.includes(i) ? "chosen" : "dim"} />
                 ))}
               </div>

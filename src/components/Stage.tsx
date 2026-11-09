@@ -3,6 +3,8 @@
 import { type CSSProperties, useEffect, useState } from "react";
 import type { Band } from "@/lib/gameLook";
 import { AnswerShape, shapeName, shapeNumber } from "./AnswerShape";
+import { Picture } from "./Picture";
+import { type ShownPicture, visibleText } from "@/lib/media";
 
 /** One answer option in the school's answer colours, always with its shape and text (never colour alone). */
 export function AnswerTile({
@@ -12,6 +14,7 @@ export function AnswerTile({
   disabled,
   state,
   count,
+  picture,
 }: {
   index: number;
   text: string;
@@ -19,6 +22,8 @@ export function AnswerTile({
   disabled?: boolean;
   state?: "correct" | "wrong" | "chosen" | "dim";
   count?: number;
+  /** An answer can be a picture, with or without text (wave2-plan.md part 2f). */
+  picture?: ShownPicture | null;
 }) {
   const n = shapeNumber(index);
   return (
@@ -31,7 +36,8 @@ export function AnswerTile({
       aria-pressed={state === "chosen"}
     >
       <AnswerShape index={index} size={34} color="currentColor" />
-      <span className="answer-text">{text}</span>
+      {picture && <Picture picture={picture} className="answer-picture" />}
+      {(!picture || visibleText(text, picture)) && <span className="answer-text">{text}</span>}
       {state === "correct" && <span className="answer-mark">✓ Correct</span>}
       {count !== undefined && <span className="answer-count">{count}</span>}
     </button>
@@ -55,23 +61,27 @@ export function useCountdown(closesAt: number | null, serverNow: () => number): 
  * An answer in a live game, drawn in the game's look (game-looks.css): always its colour, its shape and its text, so
  * colour is never the only cue. After the question closes it shows how many chose it and marks the right one.
  */
-export function GameTile({ index, text, onClick, state, count, share }: {
+export function GameTile({ index, text, onClick, state, count, share, picture }: {
   index: number;
   text: string;
+  /** An answer can be a picture, with or without text (wave2-plan.md part 2f). It keeps its shape and colour. */
+  picture?: ShownPicture | null;
   onClick?: () => void;
   state?: "correct" | "dim" | "chosen";
   count?: number;
   /** Results: this answer's bar, 0 to 100 against the most chosen (the count says the number). */
   share?: number;
 }) {
-  const label = shapeName(index) + ": " + text + (state === "correct" ? ", the right answer" : "")
+  const said = text || picture?.alt || "";
+  const label = shapeName(index) + ": " + said + (state === "correct" ? ", the right answer" : "")
     + (count !== undefined ? `, ${count} chose it` : "");
   return (
     <button type="button" className={"gl-tile" + (state === "dim" ? " is-dim" : state === "chosen" ? " is-chosen" : "")}
             data-n={shapeNumber(index)} style={{ "--i": index } as CSSProperties} onClick={onClick} disabled={!onClick}
             aria-label={label} aria-pressed={onClick ? state === "chosen" : undefined}>
       <span className="gl-shape"><AnswerShape index={index} color="currentColor" /></span>
-      {text && <span className="gl-tile-text">{text}</span>}
+      {picture && <Picture picture={picture} className="gl-tile-picture" />}
+      {text && (!picture || visibleText(text, picture)) && <span className="gl-tile-text">{text}</span>}
       {count !== undefined && <span className="gl-count">{count}</span>}
       {share !== undefined && <span className="gl-tile-bar" aria-hidden="true"><span style={{ width: share + "%" }} /></span>}
       {state === "correct" && <span className="gl-mark" aria-hidden="true">✓ Correct</span>}
@@ -83,9 +93,10 @@ export function GameTile({ index, text, onClick, state, count, share }: {
  * A multi-select answer in a live game: the tile is the checkbox's label, so a tap, Space or a screen reader all toggle
  * it. The tick box and the shape show the choice, never colour alone.
  */
-export function GameCheckTile({ index, text, checked, onChange, disabled }: {
+export function GameCheckTile({ index, text, checked, onChange, disabled, picture }: {
   index: number;
   text: string;
+  picture?: ShownPicture | null;
   checked: boolean;
   onChange: (checked: boolean) => void;
   disabled?: boolean;
@@ -94,9 +105,10 @@ export function GameCheckTile({ index, text, checked, onChange, disabled }: {
     <label className={"gl-tile gl-check" + (checked ? " is-chosen" : "")} data-n={shapeNumber(index)}
            style={{ "--i": index } as CSSProperties}>
       <input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)}
-             aria-label={shapeName(index) + ": " + text} />
+             aria-label={shapeName(index) + ": " + (text || picture?.alt || "")} />
       <span className="gl-shape"><AnswerShape index={index} color="currentColor" /></span>
-      <span className="gl-tile-text">{text}</span>
+      {picture && <Picture picture={picture} className="gl-tile-picture" />}
+      {text && (!picture || visibleText(text, picture)) && <span className="gl-tile-text">{text}</span>}
     </label>
   );
 }

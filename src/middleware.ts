@@ -17,6 +17,8 @@ export function middleware(request: NextRequest) {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self' data:",
+    // A slide's video (part 2g): YouTube's privacy-enhanced player only, never another site.
+    "frame-src https://www.youtube-nocookie.com",
     `connect-src 'self' ${connect.join(" ")}`.trim(),
     "form-action 'self'",
     "frame-ancestors 'none'",

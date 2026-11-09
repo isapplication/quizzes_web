@@ -1,5 +1,6 @@
 /** Assignments: a quiz done at each student's own pace, by link or for a class (starter-library plan, Step 3a). */
 import type { ReportQuestion } from "@/components/QuestionResult";
+import type { ShownPicture } from "@/lib/media";
 import type { ShownBrand } from "@/lib/me";
 import type { AnswerKey, Pick } from "@/lib/questionTypes";
 
@@ -102,8 +103,12 @@ export interface PlayQuestion {
   /** Wave 2e: a scale's ends and labels; a free-text question's longest answer. */
   scale?: { min: number; max: number; lowLabel?: string; highLabel?: string } | null;
   maxLength?: number | null;
-  /** Wave 2h: the question's image (and reveal), as the stand-in until 2f's signed links. */
-  image?: { url: string; alt: string; width?: number; height?: number; reveal?: boolean } | null;
+  /** Wave 2f: the question's picture and each answer's picture (null where an answer has none), with signed addresses;
+   *  Wave 2h: {@code reveal} when the picture uncovers in steps. */
+  image?: (ShownPicture & { reveal?: boolean }) | null;
+  choiceImages?: (ShownPicture | null)[] | null;
+  /** Wave 2g: a slide's YouTube clip, played on the student's device. */
+  video?: { id: string; start?: number | null; end?: number | null } | null;
 }
 
 export interface PlayState {

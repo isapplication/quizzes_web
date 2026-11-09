@@ -3,6 +3,8 @@
 import { useCallback, useId, useRef, useState } from "react";
 import { AnswerShape, shapeName, shapeNumber } from "./AnswerShape";
 import { GameCheckTile } from "./Stage";
+import { Picture } from "./Picture";
+import { type ShownPicture, visibleText } from "@/lib/media";
 import { formatNumber, LIMITS, sliderStart, snap, toggle } from "@/lib/questionTypes";
 
 /**
@@ -15,8 +17,10 @@ type Variant = "game" | "stage";
 const submitClass = (v: Variant) => (v === "game" ? "gl-btn gl-btn-big" : "btn btn-primary activity-check");
 
 /** Multi-select: a checkbox per answer, then Submit. At least one must be ticked. */
-export function MultiSelectForm({ choices, onSubmit, busy = false, variant, compact = false }: {
+export function MultiSelectForm({ choices, onSubmit, busy = false, variant, compact = false, pictures }: {
   choices: string[];
+  /** A picture per answer (wave2-plan.md part 2f), null where an answer has none. */
+  pictures?: (ShownPicture | null)[];
   onSubmit: (choices: number[]) => void;
   busy?: boolean;
   variant: Variant;
@@ -34,7 +38,7 @@ export function MultiSelectForm({ choices, onSubmit, busy = false, variant, comp
       {variant === "game" ? (
         <div className="gl-tiles gl-in" data-count={choices.length}>
           {choices.map((c, i) => (
-            <GameCheckTile key={i} index={i} text={compact ? "" : c} checked={picked.includes(i)} disabled={busy} onChange={() => set(i)} />
+            <GameCheckTile key={i} index={i} text={compact ? "" : c} picture={pictures?.[i]} checked={picked.includes(i)} disabled={busy} onChange={() => set(i)} />
           ))}
         </div>
       ) : (
@@ -47,7 +51,8 @@ export function MultiSelectForm({ choices, onSubmit, busy = false, variant, comp
                 <input type="checkbox" checked={picked.includes(i)} disabled={busy} onChange={() => set(i)}
                        aria-label={shapeName(i) + ": " + c} />
                 <AnswerShape index={i} size={34} color="currentColor" />
-                <span className="answer-text">{c}</span>
+                {pictures?.[i] && <Picture picture={pictures[i]} className="answer-picture" />}
+                {(!pictures?.[i] || visibleText(c, pictures[i])) && <span className="answer-text">{c}</span>}
               </label>
             );
           })}

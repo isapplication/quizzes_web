@@ -1,9 +1,11 @@
 "use client";
 
 import type { CSSProperties } from "react";
+import { Picture } from "@/components/Picture";
+import { SlideMedia, ReactionWall } from "@/components/live/SlideExtras";
 import { GameTile } from "@/components/Stage";
-import { type AnswerKey, formatNumber, keyText, normaliseTyped, percent, type PinArea, type Pick, pickOf, position,
-  type QuestionImage } from "@/lib/questionTypes";
+import { NO_REACTIONS, type ReactionCounts, type ShownPicture } from "@/lib/media";
+import { type AnswerKey, formatNumber, keyText, normaliseTyped, percent, type PinArea, type Pick, pickOf, position } from "@/lib/questionTypes";
 import { PinResults, QuestionImageView } from "@/components/ImageQuestion";
 
 /**
@@ -22,9 +24,18 @@ export interface HostQuestion {
   /** SCALE (Wave 2e). */
   scale?: { min: number; max: number; lowLabel?: string; highLabel?: string };
   maxLength?: number;
-  /** Wave 2h: the question's image and image reveal. */
-  image?: QuestionImage;
+  /** Wave 2f: the question's picture (pin questions draw on it) and each answer's picture (null where an answer has none). */
+  image?: ShownPicture;
+  choiceImages?: (ShownPicture | null)[];
+  /** Wave 2h: image reveal. */
   reveal?: boolean;
+  /** Wave 2g: a slide's YouTube clip. */
+  video?: { id: string; start?: number | null; end?: number | null } | null;
+}
+
+/** The question's picture above its text on the classroom screen (and nothing when there is none). */
+export function HostQuestionPicture({ question }: { question: { image?: ShownPicture } }) {
+  return question.image ? <Picture picture={question.image} className="gl-q-picture" main /> : null;
 }
 
 export interface HostStats {
@@ -76,7 +87,7 @@ export function HostOpenAnswers({ question }: { question: HostQuestion }) {
       <>
         {pick === "many" && <p className="gl-host-note"><span className="gl-pill">Pick every right answer</span></p>}
         <div className="gl-tiles gl-in" data-count={question.choices.length}>
-          {question.choices.map((c, i) => <GameTile key={i} index={i} text={c} />)}
+          {question.choices.map((c, i) => <GameTile key={i} index={i} text={c} picture={question.choiceImages?.[i]} />)}
         </div>
       </>
     );
@@ -179,7 +190,7 @@ export function HostResults({ question, closed, moderation }: { question: HostQu
         )}
         <div className="gl-tiles gl-in" data-count={question.choices.length}>
           {question.choices.map((c, i) => (
-            <GameTile key={i} index={i} text={c} count={counts[i] ?? 0} share={percent(counts[i] ?? 0, most)}
+            <GameTile key={i} index={i} text={c} picture={question.choiceImages?.[i]} count={counts[i] ?? 0} share={percent(counts[i] ?? 0, most)}
                       state={qtype === "POLL" ? undefined : correct.includes(i) ? "correct" : "dim"} />
           ))}
         </div>
@@ -402,7 +413,13 @@ function SliderSpread({ question, closed }: { question: HostQuestion; closed: Ho
 }
 
 /** A content slide on the classroom screen: title and text large, no timer; Next moves on. */
-export function HostSlide({ question, last, onNext }: { question: HostQuestion; last: boolean; onNext: () => void }) {
+export function HostSlide({ question, last, onNext, reactions = NO_REACTIONS }: {
+  question: HostQuestion;
+  last: boolean;
+  onNext: () => void;
+  /** How the class is reacting (part 2g), updated about every 300 ms. */
+  reactions?: ReactionCounts;
+}) {
   return (
     <>
       <div className="gl-row">
@@ -413,7 +430,9 @@ export function HostSlide({ question, last, onNext }: { question: HostQuestion; 
       <article className="gl-card gl-slide gl-in">
         <h1 className="gl-slide-title">{question.title}</h1>
         {question.text && <p className="gl-slide-text">{question.text}</p>}
+        <SlideMedia picture={question.image} video={question.video} title={question.title ?? "Slide"} />
       </article>
+      <ReactionWall reactions={reactions} />
     </>
   );
 }

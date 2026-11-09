@@ -9,13 +9,16 @@ import { CategoriseForm, type CategoriseShown, FreeTextForm, IdeasForm, MultiSel
 import { type AnswerKey, formatNumber, keyText, outcomeOf, type Pick, pickOf } from "@/lib/questionTypes";
 import { GameLook } from "@/components/live/GameLook";
 import { PinForm, QuestionImageView } from "@/components/ImageQuestion";
-import type { QuestionImage } from "@/lib/questionTypes";
 import { Buddy, Confetti } from "@/components/live/LookArt";
 import { LastSecondsTicks, PlayerBadge, SoundToggle, TalkCountdown } from "@/components/live/GameBits";
 import { lookBand, lookWords } from "@/lib/gameLook";
 import { type GameSoundName, useGameSound } from "@/lib/gameSound";
 import { connectLive, LiveConnection, LiveMessage, LiveStatus } from "@/lib/live";
 import { OwnerBrandMark, useOwnerBrand } from "@/components/OwnerBrand";
+import { Picture } from "@/components/Picture";
+import { ReactionButtons } from "@/components/live/SlideExtras";
+import { type ShownPicture } from "@/lib/media";
+import { questionSpeech, ReadAloudButton } from "@/lib/readAloud";
 import type { ShownBrand } from "@/lib/me";
 import { CharacterAvatar } from "@/components/live/CharacterAvatar";
 import { isCharacter } from "@/lib/characters";
@@ -47,8 +50,10 @@ interface Question {
   scale?: ScaleShown;
   /** WORD_CLOUD, OPEN_ENDED: the longest answer in characters. */
   maxLength?: number;
-  /** Wave 2h: the question's image, and whether it uncovers in steps (quiz, type answer). */
-  image?: QuestionImage;
+  /** Wave 2f: the question's picture (pin questions draw on it) and each answer's picture (null where an answer has none). */
+  image?: ShownPicture;
+  choiceImages?: (ShownPicture | null)[];
+  /** Wave 2h: whether the picture uncovers in steps (quiz, type answer). */
   reveal?: boolean;
   /** Wave 2i: a brainstorm's limits. */
   brainstorm?: { maxIdeas: number; maxLength: number; maxVotes: number };
@@ -169,6 +174,8 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
   // Free text the server refused (a rude word, too long): its reason and what was sent, to change and send again.
   const [refused, setRefused] = useState<{ message: string; text: string } | null>(null);
   const [votes, setVotes] = useState<VoteRound | null>(null);
+  // The reaction this player chose on the slide on screen (part 2g): one each, a new one replaces it.
+  const [reaction, setReaction] = useState<number | null>(null);
   // The question on screen, for the message handler (a slide's closing sends no result to show).
   const shownQuestion = useRef<Question | null>(null);
   // The text of the last free-text answer sent, for the message handler.
@@ -192,6 +199,7 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
       setRefused(null);
       setVotes(null);
       setTalking(!!q.talkEndsAt && q.talkEndsAt > (live.current?.serverNow() ?? Date.now()));
+      setReaction(null);
       setView(pickFor(q) === "none" ? "slide" : "question");
     };
     switch (m.type) {
@@ -203,6 +211,7 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
         setTeam(Number(m.team ?? 0));
         setTeamName((m.teamName as string) ?? null);
         setRanked(m.ranked !== false);
+        setReaction(typeof m.reaction === "number" ? m.reaction : null);
         if (m.votes && !(m.votes as VoteRound).voted) {
           // Rejoined during a brainstorm's votes round.
           setQuestion(m.question as unknown as Question);
@@ -254,6 +263,9 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
         }
         if (m.accepted === false && m.message) setMessage(String(m.message));
         if (m.accepted === true) setBoostPending(m.boostPending === true);
+        break;
+      case "reactAck":
+        if (m.accepted === false && m.message) setMessage(String(m.message));
         break;
       case "votes":
         // A brainstorm's votes round has started.
@@ -365,7 +377,7 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
     ? keyText(key.qtype, key.key, question.choices, key.correctIndexes, question.slider?.step ?? 1) : null;
 
   return (
-    <GameLook grade={lookGrade} kind={compact ? "compact" : "player"}>
+    <GameLook grade={lookGrade} kind={compact ? "compact" : "player"} background={brand?.backgroundUrl}>
       <header className="gl-bar">
         {compact ? <span className="brand">{shownName}</span> : <OwnerBrandMark brand={brand} />}
         <span className="gl-spacer" />
@@ -414,14 +426,17 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
             )}
             {question.timed !== false && !compact && <LastSecondsTicks until={question.closesAt} serverNow={serverNow} tick={() => sound("tick")} />}
             {!compact && (
-              <h1 className="gl-card gl-q">
-                {question.visual && <span className="gl-visual" aria-hidden="true">{question.visual}</span>}{question.text}
-              </h1>
+              <div className="gl-q-with-speaker">
+                <h1 className="gl-card gl-q">
+                  {question.visual && <span className="gl-visual" aria-hidden="true">{question.visual}</span>}{question.text}
+                </h1>
+                <ReadAloudButton text={questionSpeech(question.text, question.choices, question.choiceImages)} />
+              </div>
             )}
-            {question.image && pick !== "point" && !compact && (
-              <QuestionImageView image={question.image} reveal={question.reveal} openedAt={question.talkEndsAt ?? question.openedAt}
-                                 closesAt={question.closesAt} serverNow={serverNow} />
-            )}
+            {question.image && pick !== "point" && !compact && (question.reveal
+              ? <QuestionImageView image={question.image} reveal openedAt={question.talkEndsAt ?? question.openedAt}
+                                   closesAt={question.closesAt} serverNow={serverNow} />
+              : <Picture picture={question.image} className="gl-q-picture" main />)}
             {pick === "point" && question.image && (
               <PinForm key={question.index} variant="game" image={question.image}
                        onSubmit={(point) => send({ answer: { point } }, { shape: null, text: `Pin at ${Math.round(point.x * 100)}% across, ${Math.round(point.y * 100)}% down` })} />
@@ -429,13 +444,13 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
             {pick === "one" && (
               <div className="gl-tiles gl-in" data-count={question.choices.length}>
                 {question.choices.map((c, i) => (
-                  <GameTile key={i} index={i} text={compact ? "" : c}
+                  <GameTile key={i} index={i} text={compact ? "" : c} picture={compact ? null : question.choiceImages?.[i]}
                             onClick={talking ? undefined : () => send({ choice: i }, { shape: i, text: c })} />
                 ))}
               </div>
             )}
             {!talking && pick === "many" && (
-              <MultiSelectForm variant="game" choices={question.choices} compact={compact}
+              <MultiSelectForm variant="game" choices={question.choices} compact={compact} pictures={compact ? undefined : question.choiceImages}
                                onSubmit={(choices) => send({ answer: { choices } },
                                  { shape: null, text: choices.map((i) => question.choices[i]).join(", ") })} />
             )}
@@ -485,6 +500,12 @@ export function PlayerGame({ url, pin, ticket, name, quizTitle, brand, lookGrade
             <Buddy grade={lookGrade} />
             <div className="gl-big">Look at the screen</div>
             {question.title && <div className="gl-card gl-waiting"><span className="gl-waiting-title">{question.title}</span></div>}
+            {!compact && (
+              <ReactionButtons current={reaction} onReact={(r) => {
+                setReaction(r);
+                live.current?.send({ type: "react", index: question.index, reaction: r });
+              }} />
+            )}
             <div className="gl-sub">Your teacher moves on when everyone has read it.</div>
           </div>
         )}

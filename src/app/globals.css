@@ -949,3 +949,41 @@ input[type=email], input[type=tel], input[type=password], input[type=search] {
 .area-fields input { inline-size: 6em; }
 .vote-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
 .vote-list label { min-block-size: 32px; overflow-wrap: anywhere; }
+/* ---------- Pictures and video on questions (Wave 2f and 2g): editor, quiz page, assignment page ---------- */
+.q-picture { display: block; max-width: 100%; height: auto; object-fit: contain; border-radius: 8px; }
+.picture-field { display: grid; gap: 6px; }
+.picture-drop { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px; border: 2px dashed var(--border); border-radius: 10px; background: var(--card); }
+.picture-drop.over { border-color: var(--pc); background: color-mix(in oklab, var(--pc) 8%, var(--card)); }
+.picture-drop:focus-visible { outline: 3px solid var(--pc); outline-offset: 2px; }
+.picture-field-has { display: grid; grid-template-columns: minmax(96px, 200px) 1fr; gap: 12px; align-items: start; }
+.picture-field-preview { width: 100%; height: auto; max-height: 160px; object-fit: contain; border-radius: 8px; background: var(--card); border: 1px solid var(--border); }
+.picture-field-gone { display: grid; place-items: center; min-height: 80px; color: var(--muted); }
+.picture-field-text { display: grid; gap: 4px; min-width: 0; }
+.picture-field-text input[aria-invalid="true"] { border-color: var(--danger); }
+.picture-field.compact .picture-drop { padding: 6px; border-style: solid; background: rgba(255, 255, 255, 0.92); color: var(--ink); }
+.picture-field.compact .picture-field-has { grid-template-columns: 56px 1fr; gap: 8px; background: rgba(255, 255, 255, 0.95); color: var(--ink); border-radius: 8px; padding: 8px; }
+.picture-field.compact .picture-field-preview { max-height: 56px; }
+.answer-edit { flex-wrap: wrap; }
+.answer-edit-picture { flex: 1 1 100%; min-width: 0; }
+.field-label { display: block; font-weight: 600; margin-bottom: 4px; }
+.quiz-q-picture { max-height: 220px; width: auto; margin: 6px 0; }
+.quiz-choice-picture { width: 48px; height: 48px; object-fit: contain; border-radius: 6px; }
+.stage-q-picture { max-height: 40dvh; width: auto; margin: 0 auto; }
+.answer-picture { max-height: 22dvh; width: auto; max-width: 100%; background: rgba(255, 255, 255, 0.92); border-radius: 8px; padding: 2px; }
+.question-text-row { display: flex; align-items: center; gap: 8px; }
+.question-text-row .question-text { flex: 1; min-width: 0; }
+.stage .read-aloud, .picture-field-text ~ .read-aloud { border: 1px solid var(--border); background: var(--card); color: var(--ink); }
+.assignment-slide .slide-media { margin-top: 8px; }
+.assignment-slide .slide-picture { max-height: 40dvh; }
+.preview-game { margin-top: 6px; border-radius: 10px; min-height: 150px; display: grid; place-items: center; padding: 12px; background: linear-gradient(rgb(0 0 0 / 0.62), rgb(0 0 0 / 0.62)), var(--gl-background) center / cover no-repeat; }
+.preview-game-card { background: var(--card); color: var(--sc); border-radius: 10px; padding: 10px 14px; font-weight: 700; text-align: center; }
+@media (max-width: 480px) {
+  .picture-field-has { grid-template-columns: 1fr; }
+}
+
+/* A slide's picture and video (live classroom screen and assignment page): side by side where there is room, so the reactions stay in view. */
+.slide-media { display: flex; flex-wrap: wrap; gap: 0.8em; justify-content: center; align-items: center; width: 100%; }
+.slide-picture { max-height: 30dvh; width: auto; max-width: 100%; }
+.slide-video { width: min(100%, calc(34dvh * 16 / 9)); aspect-ratio: 16 / 9; border-radius: 12px; overflow: hidden; background: #000; }
+.slide-video iframe { width: 100%; height: 100%; border: 0; display: block; }
+

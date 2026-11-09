@@ -3,6 +3,7 @@
  * small pure helpers the player, host and assignment screens share (slider steps, how an answer key reads, typed-answer
  * normalising). The server decides every score; these helpers only shape what people see and send.
  */
+import { type MediaRef, type SlideVideo, videoProblem } from "./media";
 
 export type QType = "QUIZ" | "TRUE_FALSE" | "MULTI_SELECT" | "POLL" | "TYPE_ANSWER" | "SLIDER" | "PUZZLE" | "CATEGORISE" | "SLIDE"
   | "SCALE" | "WORD_CLOUD" | "OPEN_ENDED" | "PIN_ANSWER" | "DROP_PIN" | "BRAINSTORM";
@@ -25,8 +26,8 @@ export const REVEAL_TYPES: QType[] = ["QUIZ", "TYPE_ANSWER"];
 export interface QuestionImage {
   url: string;
   alt: string;
-  width?: number;
-  height?: number;
+  width?: number | null;
+  height?: number | null;
 }
 
 /** A pin-answer circle: the centre as a share of the image's width and height, the radius as a share of its width. */
@@ -146,6 +147,8 @@ export interface EditorPayload {
   /** Wave 2i: each brainstorm round's time in seconds. */
   ideaSeconds?: number | null;
   voteSeconds?: number | null;
+  /** SLIDE: a YouTube clip (part 2g). */
+  video?: SlideVideo | null;
 }
 
 /** One question in the editor. {@code correctIndexes} is empty until the teacher marks the right answer(s). */
@@ -160,6 +163,10 @@ export interface EditorQuestion {
   explanation: string | null;
   /** Read only: what the server sent before 1b; never relied on after {@link fromServer}. */
   correctIndex?: number;
+  /** The question's (or slide's) picture, with its description (part 2f). */
+  image?: MediaRef | null;
+  /** A picture per answer of a quiz, multi-select or poll question, in the answers' order (null where there is none). */
+  choiceImages?: (MediaRef | null)[];
 }
 
 export const CHOICE_TYPES: QType[] = ["QUIZ", "MULTI_SELECT", "POLL"];
@@ -229,6 +236,22 @@ function num(v: unknown): number | null {
   return typeof v === "number" && Number.isFinite(v) ? v : null;
 }
 
+/** A picture as the API sends it, or null when there is none. */
+function mediaOf(v: unknown): MediaRef | null {
+  if (!v || typeof v !== "object") return null;
+  const m = v as Record<string, unknown>;
+  if (typeof m.mediaId !== "string") return null;
+  return { mediaId: m.mediaId, alt: typeof m.alt === "string" ? m.alt : "", url: typeof m.url === "string" ? m.url : null,
+    width: num(m.width), height: num(m.height) };
+}
+
+/** The YouTube clip of a slide as the API stores it ({id, start, end}). */
+function videoOf(v: unknown): SlideVideo | null {
+  if (!v || typeof v !== "object") return null;
+  const m = v as Record<string, unknown>;
+  return typeof m.id === "string" ? { id: m.id, start: num(m.start) ?? 0, end: num(m.end) } : null;
+}
+
 /** A question as the editor API sends it, made whole: the old single {@code correctIndex} is read when the list is missing. */
 export function fromServer(raw: Record<string, unknown>): EditorQuestion {
   const type = asType(raw.type);
@@ -270,7 +293,12 @@ export function fromServer(raw: Record<string, unknown>): EditorQuestion {
         }))
       : [{ text: "", category: 0 }, { text: "", category: 0 }];
   }
-  if (type === "SLIDE") payload.title = typeof p.title === "string" ? p.title : "";
+  if (type === "SLIDE") {
+    payload.title = typeof p.title === "string" ? p.title : "";
+    payload.video = videoOf(p.video);
+  }
+  const image = mediaOf(raw.image);
+  const pictures = Array.isArray(raw.choiceImages) ? (raw.choiceImages as unknown[]).map(mediaOf) : [];
   return {
     type,
     text: String(raw.text ?? ""),
@@ -280,6 +308,9 @@ export function fromServer(raw: Record<string, unknown>): EditorQuestion {
     correctIndexes: type === "POLL" || type === "PUZZLE" || type === "CATEGORISE" ? [] : correctIndexes,
     payload,
     explanation: typeof raw.explanation === "string" ? raw.explanation : null,
+    image,
+    choiceImages: CHOICE_TYPES.includes(type) && pictures.some(Boolean)
+      ? choices.map((_, i) => pictures[i] ?? null) : [],
   };
 }
 
@@ -289,9 +320,10 @@ export function fromServer(raw: Record<string, unknown>): EditorQuestion {
  */
 export function changeType(q: EditorQuestion, type: QType): EditorQuestion {
   if (q.type === type) return q;
-  const next = { ...blank(type), text: q.text, explanation: q.explanation, points: q.points };
+  const next: EditorQuestion = { ...blank(type), text: q.text, explanation: q.explanation, points: q.points, image: q.image ?? null };
   if (CHOICE_TYPES.includes(q.type) && CHOICE_TYPES.includes(type)) {
     next.choices = [...q.choices];
+    next.choiceImages = [...(q.choiceImages ?? [])];
     next.correctIndexes = type === "POLL" ? [] : type === "QUIZ" ? q.correctIndexes.slice(0, 1) : [...q.correctIndexes];
   }
   if (type === "SLIDE") next.text = q.text.slice(0, LIMITS.slideText);
@@ -299,15 +331,28 @@ export function changeType(q: EditorQuestion, type: QType): EditorQuestion {
   return next;
 }
 
+/** A picture with its description: only such a picture is sent (the API refuses one without). */
+function described(m: MediaRef | null | undefined): m is MediaRef {
+  return !!m && m.alt.trim() !== "";
+}
+
 /** What is sent to the editor API: empty optional answers and items dropped, the right answers re-numbered. */
 export function toServer(q: EditorQuestion) {
   let choices = q.choices;
   let correctIndexes = [...q.correctIndexes].sort((a, b) => a - b);
+  let choiceImages: ({ mediaId: string; alt: string } | null)[] = [];
   if (CHOICE_TYPES.includes(q.type) || q.type === "PUZZLE") {
     const min = q.type === "PUZZLE" ? LIMITS.minItems : LIMITS.minChoices;
-    const keep = q.choices.map((c, i) => i < min || c.trim() !== "" || correctIndexes.includes(i));
+    // A picture still waiting for its description stays in the editor and is not sent yet (a draft saves without it).
+    const pictured = (i: number) => CHOICE_TYPES.includes(q.type) && described(q.choiceImages?.[i]);
+    // An answer that is only a picture is kept even with no text.
+    const keep = q.choices.map((c, i) => i < min || c.trim() !== "" || correctIndexes.includes(i) || pictured(i));
     choices = q.choices.filter((_, i) => keep[i]);
     correctIndexes = correctIndexes.filter((i) => keep[i]).map((i) => keep.slice(0, i).filter(Boolean).length);
+    if (CHOICE_TYPES.includes(q.type)) {
+      const kept = q.choices.map((_, i) => (described(q.choiceImages?.[i]) ? q.choiceImages![i] : null)).filter((_, i) => keep[i]);
+      choiceImages = kept.some(Boolean) ? kept.map((m) => (m ? { mediaId: m.mediaId, alt: m.alt.trim() } : null)) : [];
+    }
   }
   let payload: Record<string, unknown> = {};
   switch (q.type) {
@@ -328,6 +373,11 @@ export function toServer(q: EditorQuestion) {
       choices = [];
       correctIndexes = [];
       payload = { title: (q.payload.title ?? "").trim() };
+      {
+        // A pasted link goes up as it is: the server keeps only the YouTube id and the times.
+        const v = q.payload.video;
+        if (v && (v.url?.trim() || v.id)) payload.video = v.url?.trim() ? { url: v.url.trim(), start: v.start, end: v.end } : { id: v.id, start: v.start, end: v.end };
+      }
       break;
     case "CATEGORISE": {
       const cp = q.payload;
@@ -387,6 +437,8 @@ export function toServer(q: EditorQuestion) {
     correctIndex: q.type === "QUIZ" || q.type === "TRUE_FALSE" ? correctIndexes[0] ?? -1 : -1,
     payload,
     explanation: q.explanation,
+    image: described(q.image) ? { mediaId: q.image!.mediaId, alt: q.image!.alt.trim() } : null,
+    choiceImages,
   };
 }
 
@@ -439,22 +491,31 @@ export function normaliseTyped(text: string): string {
   return text.normalize("NFKC").toLowerCase().trim().replace(/[.,!?;:]+$/u, "").trim().replace(/\s+/gu, " ");
 }
 
-function sameAfterTrim(list: string[]): boolean {
-  return new Set(list.map((c) => c.trim())).size !== list.length;
+function sameAfterTrim(list: string[], pictures: ({ mediaId: string } | null | undefined)[] = []): boolean {
+  return new Set(list.map((c, i) => c.trim() + (pictures[i] ? "|" + pictures[i]!.mediaId : ""))).size !== list.length;
+}
+
+/** The picture's description is required (part 2f, W21): screen readers and read-aloud need it. */
+function pictureProblem(image: MediaRef | null | undefined, name: string): string | null {
+  if (image && !image.alt.trim()) return "Describe " + name + " in a few words, for people who can't see it.";
+  return null;
 }
 
 /** What still stops a question from being published, in plain words; null when it is ready. Mirrors the server's rules. */
 export function missing(raw: EditorQuestion): string | null {
   const wire = toServer(raw);
   const q = { ...raw, choices: wire.choices, correctIndexes: wire.correctIndexes };
+  const pictures = wire.choiceImages;
+  const pictureIssue = pictureProblem(raw.image, q.type === "SLIDE" ? "the slide's picture" : "the question's picture");
   if (q.type === "SLIDE") {
     const title = (raw.payload.title ?? "").trim();
     if (!title) return "Give the slide a title.";
     if (title.length > LIMITS.slideTitle) return `Shorten the title to ${LIMITS.slideTitle} characters or fewer.`;
     if (q.text.length > LIMITS.slideText) return `Shorten the slide's text to ${LIMITS.slideText} characters or fewer.`;
-    return null;
+    return pictureIssue ?? videoProblem(raw.payload.video);
   }
   if (!q.text.trim()) return "Write the question.";
+  if (pictureIssue) return pictureIssue;
   if (q.text.length > LIMITS.question) return `Shorten the question to ${LIMITS.question} characters or fewer.`;
 
   if (REVEAL_TYPES.includes(q.type) && (raw.payload.reveal || raw.payload.image?.url.trim())) {
@@ -463,11 +524,13 @@ export function missing(raw: EditorQuestion): string | null {
   }
 
   if (CHOICE_TYPES.includes(q.type)) {
-    if (q.choices.filter((c) => c.trim()).length < LIMITS.minChoices) return "Write at least two answers.";
+    const undescribed = (raw.choiceImages ?? []).findIndex((m) => m && !m.alt.trim());
+    if (undescribed >= 0) return "Describe answer " + (undescribed + 1) + "'s picture in a few words, for people who can't see it.";
+    if (q.choices.filter((c, i) => c.trim() || pictures[i]).length < LIMITS.minChoices) return "Write at least two answers.";
     if (q.choices.length > LIMITS.maxChoices) return "A question can have at most six answers. Remove one.";
-    if (q.choices.some((c) => !c.trim())) return "Fill in or remove the empty answer.";
+    if (q.choices.some((c, i) => !c.trim() && !pictures[i])) return "Fill in or remove the empty answer, or give it a picture.";
     if (q.choices.some((c) => c.length > LIMITS.answer)) return `Shorten each answer to ${LIMITS.answer} characters or fewer.`;
-    if (sameAfterTrim(q.choices)) return "Make every answer different.";
+    if (sameAfterTrim(q.choices, pictures)) return "Make every answer different.";
     if (q.type === "QUIZ" && q.correctIndexes.length !== 1) return "Mark the correct answer.";
     if (q.type === "MULTI_SELECT") {
       if (q.correctIndexes.length < 1) return "Mark at least one correct answer.";
