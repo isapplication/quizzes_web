@@ -1,7 +1,7 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useEffect, useId, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useId, useRef, useState } from "react";
 import { AppFrame } from "@/components/AppFrame";
 import { QuestionForm } from "@/components/QuestionForm";
 import { api } from "@/lib/api";
@@ -41,7 +41,8 @@ interface Run {
   errorMessage: string | null;
   publishedQuizId: string | null;
   drafts: Draft[];
-  kind?: DraftKind;
+  /** QUIZ, LESSON, or RETEACH (3g: started from a report's hard questions). */
+  kind?: DraftKind | "RETEACH";
   sourceKind?: SourceKind;
   sourceTitle?: string | null;
   sourcePages?: number | null;
@@ -54,13 +55,16 @@ const LESSON_TYPES: QType[] = [...WRITABLE, "SLIDE"];
 export default function StudioPage() {
   return (
     <AppFrame>
-      <Studio />
+      <Suspense>
+        <Studio />
+      </Suspense>
     </AppFrame>
   );
 }
 
 function Studio() {
   const router = useRouter();
+  const params = useSearchParams();
   const me = useMe();
   const id = useId();
   const [status, setStatus] = useState<StudioStatus | null>(null);
@@ -88,6 +92,17 @@ function Studio() {
   useEffect(() => {
     api<StudioStatus>("/api/v1/ai/status").then(setStatus).catch((e: Error) => setError(e.message));
   }, []);
+
+  // A run started elsewhere ("Re-teach with AI" on a report) opens here for review: ?run=<id>.
+  const startedRun = params.get("run");
+  useEffect(() => {
+    if (!startedRun) return;
+    setBusy(true);
+    setRun(null);
+    setItems([]);
+    seen.current = new Set();
+    setRunId(startedRun);
+  }, [startedRun]);
 
   // The cost before drafting (W53), from what the run will be; never the source itself.
   useEffect(() => {
@@ -350,6 +365,12 @@ function Studio() {
         </div>
       )}
       {run?.status === "FAILED" && <div className="alert alert-danger">{run.errorMessage}</div>}
+      {run?.kind === "RETEACH" && (
+        <div className="alert" role="note">
+          Re-teach: new questions like the ones your class found hard, drafted from those questions and checked like any
+          draft. Keep, edit or remove each one, then publish.
+        </div>
+      )}
 
       {run && run.received > 0 && (
         <div className="card stack">

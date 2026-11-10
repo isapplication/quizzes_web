@@ -67,6 +67,7 @@ function Results() {
       {results.attempts.length > 0 && (
         <ReportActions filePath={{ csv: "/api/v1/assignments/" + id + "/results.csv", xlsx: "/api/v1/assignments/" + id + "/results.xlsx" }}
                        fileName={a.title} reteachPath={"/api/v1/assignments/" + id + "/reteach"}
+                       aiReteachPath={"/api/v1/assignments/" + id + "/reteach-ai"}
                        hard={hardQuestions(results.questions).length} onError={setError} />
       )}
       <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>

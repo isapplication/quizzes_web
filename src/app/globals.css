@@ -1011,6 +1011,20 @@ input[type=email], input[type=tel], input[type=password], input[type=search] {
   .report-filters .field { flex: 1 1 140px; }
   .tabs button { padding: 10px 10px; font-size: 14px; }
 }
+/* Wave 3, 3g: the class report's AI summary and "Re-teach with AI". */
+.class-summary { gap: 12px; border-inline-start: 4px solid var(--pc); }
+.class-summary-head { gap: 8px; flex-wrap: wrap; }
+.class-summary-head h2 { margin: 0; }
+.class-summary > p.muted { margin: 0; max-inline-size: 70ch; }
+.class-summary-body { gap: 10px; max-inline-size: 70ch; }
+.class-summary-body h3 { margin: 0 0 4px; font-size: 15px; color: var(--sc); }
+.class-summary-body p, .class-summary-body ol { margin: 0; overflow-wrap: anywhere; }
+.class-summary-body ol { padding-inline-start: 1.4em; display: grid; gap: 4px; }
+.class-summary-meta { font-size: 13px; }
+.class-summary-actions, .reteach-row { gap: 8px 12px; flex-wrap: wrap; align-items: center; }
+.reteach-row .muted { flex: 1 1 240px; }
+.copy-with-status { display: inline-flex; align-items: center; gap: 8px; }
+.copy-status { min-inline-size: 4em; font-size: 14px; }
 /* Wave 3: AI Studio's sources, estimate and review; worked solutions ("Show the steps"); practice tries. */
 .studio-choice { border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 12px 10px; margin: 0; min-width: 0;
   display: grid; gap: 6px; accent-color: var(--pc); }

@@ -4,17 +4,21 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api, ApiError, downloadFile } from "@/lib/api";
 import { countOf } from "@/lib/reports";
+import { AiReteachButton } from "@/components/AiReteachButton";
 
 /**
  * What a teacher takes from a game's report or an assignment's results (wave3-plan.md, 3a): the CSV and the Excel file,
- * and "Make a re-teach quiz", which copies the questions under 35 % right into a new draft quiz and opens it. The
- * re-teach button says how many questions it would copy, and is off when there are none.
+ * "Make a re-teach quiz", which copies the questions under 35 % right into a new draft quiz and opens it, and (3g)
+ * "Re-teach with AI", which has AI Studio draft new questions like them. The hint says how many questions are hard; both
+ * re-teach buttons are off when there are none.
  */
-export function ReportActions({ filePath, fileName, reteachPath, hard, onError }: {
+export function ReportActions({ filePath, fileName, reteachPath, aiReteachPath, hard, onError }: {
   /** The report's address without {@code .csv} or {@code .xlsx}: the CSV and Excel are {@code filePath + ".csv"} etc. */
   filePath: { csv: string; xlsx: string };
   fileName: string;
   reteachPath: string;
+  /** "Re-teach with AI" for the same game or assignment. */
+  aiReteachPath: string;
   /** How many questions the re-teach quiz would hold. */
   hard: number;
   onError: (message: string) => void;
@@ -50,8 +54,10 @@ export function ReportActions({ filePath, fileName, reteachPath, hard, onError }
       <button type="button" className="btn btn-light" onClick={() => download("xlsx")} disabled={busy !== null}>Download Excel</button>
       <button type="button" className="btn btn-primary" onClick={reteach} disabled={busy !== null || hard === 0}
               aria-describedby="reteach-hint">Make a re-teach quiz</button>
+      <AiReteachButton path={aiReteachPath} hard={hard} onError={onError} />
       <span id="reteach-hint" className="muted">
-        {hard === 0 ? "No question was under 35% right." : "Copies " + countOf(hard, "question") + " under 35% right into a new draft."}
+        {hard === 0 ? "No question was under 35% right."
+          : "Copies " + countOf(hard, "question") + " under 35% right into a new draft, or AI drafts new ones like them for you to review."}
       </span>
     </div>
   );

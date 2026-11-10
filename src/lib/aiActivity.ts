@@ -33,7 +33,8 @@ export interface AiRun {
   device: string | null;
   /** Console only. */
   schoolName: string | null;
-  /** Wave 3: QUIZ, LESSON (or RETEACH, SUMMARY later), and what it was drafted from; only the source's title and size are kept. */
+  /** Wave 3: QUIZ, LESSON, RETEACH (3g: new questions like a report's hard ones) or SUMMARY (3g: a class report's
+   *  summary), and what it was drafted from; only the source's title and size are kept. */
   kind?: string | null;
   sourceKind?: "TOPIC" | "TEXT" | "WIKIPEDIA" | "PDF" | "PHOTOS" | null;
   sourceTitle?: string | null;
@@ -118,10 +119,27 @@ export const PURPOSE: Record<string, string> = {
   DRAFT: "First drafts",
   MORE: "More drafts",
   ANSWER_CHECK: "Answer check",
+  SOLUTION_CHECK: "Worked solution check",
+  SUMMARY: "Class summary",
 };
 
-export function runChip(status: RunStatus): string {
-  return status === "PUBLISHED" ? "chip chip-ok" : status === "FAILED" ? "chip chip-danger" : "chip chip-warn";
+/** What kind of AI run it was, for the run's details: null for a plain quiz. */
+export function kindText(kind: string | null | undefined): string | null {
+  switch (kind) {
+    case "LESSON": return "a lesson";
+    case "RETEACH": return "a re-teach quiz from a report's hard questions";
+    case "SUMMARY": return "a class report summary";
+    default: return null;
+  }
+}
+
+/** A run's status in words: a class summary that is ready was simply written (there is nothing to review or publish). */
+export function runStatusText(run: { status: RunStatus; kind?: string | null }): string {
+  return run.kind === "SUMMARY" && run.status === "READY" ? "Written" : RUN_STATUS[run.status];
+}
+
+export function runChip(status: RunStatus, kind?: string | null): string {
+  return status === "PUBLISHED" || (kind === "SUMMARY" && status === "READY") ? "chip chip-ok" : status === "FAILED" ? "chip chip-danger" : "chip chip-warn";
 }
 
 /** "$0.0123"; small amounts keep four decimals so a single call is not shown as $0.00. */

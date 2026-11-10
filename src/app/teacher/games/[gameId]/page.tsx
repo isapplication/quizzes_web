@@ -68,6 +68,7 @@ function GameReport() {
                   action={finished && report.players.length > 0
                     ? <ReportActions filePath={{ csv: "/api/v1/live/games/" + gameId + "/report.csv", xlsx: "/api/v1/live/games/" + gameId + "/report.xlsx" }}
                                      fileName={report.quizTitle} reteachPath={"/api/v1/live/games/" + gameId + "/reteach"}
+                                     aiReteachPath={"/api/v1/live/games/" + gameId + "/reteach-ai"}
                                      hard={hardQuestions(report.questions).length} onError={setError} /> : undefined} />
       {error && <div className="alert alert-danger">{error}</div>}
       {!finished && (

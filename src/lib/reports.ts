@@ -148,3 +148,37 @@ export function hardQuestions(questions: ReportQuestion[]): ReportQuestion[] {
 export function countOf(n: number, word: string): string {
   return n + " " + word + (n === 1 ? "" : "s");
 }
+
+/**
+ * An AI summary of a class report (3g, W52): written from the class's totals and question texts only, never a student's
+ * name or answer. {@code mode} SAMPLE when no AI key is set (put together from the numbers). Shown as a draft.
+ */
+export interface ClassSummaryView {
+  runId: string;
+  wentWell: string;
+  revisit: string;
+  nextSteps: string[];
+  mode: "LIVE" | "SAMPLE";
+  model: string;
+  writtenAt: string;
+  from: string;
+  to: string;
+}
+
+/** "Re-teach with AI" started an AI Studio run of {@code count} new questions from {@code hardQuestions} hard ones. */
+export interface ReteachStarted {
+  runId: string;
+  hardQuestions: number;
+  count: number;
+}
+
+/** The summary as plain text for "Copy": its three parts with headings, the steps numbered. */
+export function summaryText(s: Pick<ClassSummaryView, "wentWell" | "revisit" | "nextSteps">): string {
+  return "What went well\n" + s.wentWell.trim() + "\n\nWhat to revisit\n" + s.revisit.trim() + "\n\nNext steps\n"
+    + s.nextSteps.map((step, i) => (i + 1) + ". " + step.trim()).join("\n");
+}
+
+/** Where AI Studio opens a run that was started elsewhere (a re-teach from a report). */
+export function studioRunLink(runId: string): string {
+  return "/teacher/studio?run=" + encodeURIComponent(runId);
+}

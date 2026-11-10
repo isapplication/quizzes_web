@@ -1,7 +1,7 @@
 "use client";
 
 import { roleText } from "@/components/AiRunDialog";
-import { AiRun, forWhom, RUN_STATUS, runChip, usd } from "@/lib/aiActivity";
+import { AiRun, forWhom, runChip, runStatusText, usd } from "@/lib/aiActivity";
 import { when } from "@/lib/communication";
 import { gradeLabel } from "@/lib/content";
 
@@ -35,8 +35,8 @@ export function AiRunTable({ runs, onOpen, caption, school = false }: {
                 <div className="muted" style={{ fontSize: 12 }}>{gradeLabel(r.grade)} · {r.subject}</div>
               </td>
               <td>{forWhom(r).replace(/^For /, "")}</td>
-              <td>{r.passed} of {r.received} passed</td>
-              <td><span className={runChip(r.status)}>{RUN_STATUS[r.status]}</span></td>
+              <td>{r.kind === "SUMMARY" ? <span className="muted">A summary, no questions</span> : <>{r.passed} of {r.received} passed</>}</td>
+              <td><span className={runChip(r.status, r.kind)}>{runStatusText(r)}</span></td>
               <td>{r.mode === "SAMPLE" ? <span className="muted">Sample</span> : usd(r.costUsd)}</td>
               <td>
                 <button type="button" className="btn btn-light" onClick={() => onOpen(r)}>

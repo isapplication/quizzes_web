@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError } from "@/lib/api";
-import { AiRunDetail, forWhom, OUTCOME, PURPOSE, RUN_STATUS, runChip, tokens, usd } from "@/lib/aiActivity";
+import { AiRunDetail, forWhom, kindText, OUTCOME, PURPOSE, runChip, runStatusText, tokens, usd } from "@/lib/aiActivity";
 import { when } from "@/lib/communication";
 import { gradeLabel } from "@/lib/content";
 import { LoadingState } from "@/components/ui/States";
@@ -42,17 +42,19 @@ export function AiRunDialog({ runId, path, onClose }: { runId: string; path: str
               {run.schoolName && <><dt>Workspace</dt><dd>{run.schoolName}</dd></>}
               <dt>For</dt><dd>{forWhom(run)}</dd>
               <dt>Asked on</dt><dd>{when(run.createdAt)}</dd>
-              <dt>Topic</dt><dd>{gradeLabel(run.grade)} · {run.subject}{run.kind === "LESSON" && " · a lesson"}</dd>
+              <dt>Topic</dt><dd>{gradeLabel(run.grade)} · {run.subject}{kindText(run.kind) && " · " + kindText(run.kind)}</dd>
               {run.sourceKind && run.sourceKind !== "TOPIC" && (
                 <><dt>Drafted from</dt><dd>{run.sourceTitle ?? run.sourceKind}
                   {run.sourcePages ? <span className="muted"> · {run.sourcePages} {run.sourceKind === "PHOTOS" ? "photo" : "page"}{run.sourcePages === 1 ? "" : "s"}</span> : null}
                   <div className="muted">Not kept: only its title, size and fingerprint are recorded.</div></dd></>
               )}
-              <dt>Status</dt><dd><span className={runChip(run.status)}>{RUN_STATUS[run.status]}</span>
+              <dt>Status</dt><dd><span className={runChip(run.status, run.kind)}>{runStatusText(run)}</span>
                 {run.errorMessage && <div className="muted">{run.errorMessage}</div>}</dd>
               {run.publishedQuizId && <><dt>Published</dt><dd>{run.publishedAt ? when(run.publishedAt) : "Yes"}</dd></>}
-              <dt>Drafts</dt>
-              <dd>{run.requested != null && <>{run.requested} asked for · </>}{run.received} written · {run.passed} passed the checks · {run.dropped} dropped</dd>
+              {run.kind !== "SUMMARY" && <>
+                <dt>Drafts</dt>
+                <dd>{run.requested != null && <>{run.requested} asked for · </>}{run.received} written · {run.passed} passed the checks · {run.dropped} dropped</dd>
+              </>}
               <dt>AI</dt>
               <dd>{run.mode === "SAMPLE" ? "Sample mode (no AI called)" : run.model} · {run.calls} {run.calls === 1 ? "call" : "calls"} · {tokens(run.inputTokens + run.outputTokens)} tokens · {usd(run.costUsd)}</dd>
               {run.device && <><dt>Device</dt><dd>{run.device}</dd></>}
@@ -66,7 +68,7 @@ export function AiRunDialog({ runId, path, onClose }: { runId: string; path: str
               )}
             </dl>
 
-            <details open>
+            {run.kind !== "SUMMARY" && <details open>
               <summary>Drafts ({detail.drafts.length})</summary>
               {detail.drafts.length === 0 && <p className="muted">No drafts were stored.</p>}
               <ol className="ai-drafts">
@@ -94,7 +96,7 @@ export function AiRunDialog({ runId, path, onClose }: { runId: string; path: str
                   </li>
                 ))}
               </ol>
-            </details>
+            </details>}
 
             <details>
               <summary>Calls to the AI ({detail.calls.length})</summary>
