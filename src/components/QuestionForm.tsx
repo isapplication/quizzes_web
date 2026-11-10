@@ -112,7 +112,7 @@ export function QuestionForm({ index, q, total, problem, grade, subject, types, 
         </fieldset>
       )}
       {(q.type === "PIN_ANSWER" || q.type === "DROP_PIN" || q.type === "QUIZ" || q.type === "TYPE_ANSWER") && (
-        <ImageFields type={q.type} payload={q.payload} onChange={setPayload} />
+        <ImageFields type={q.type} payload={q.payload} picture={q.image ?? null} onChange={setPayload} />
       )}
       {(q.type === "WORD_CLOUD" || q.type === "OPEN_ENDED") && (
         <p className="hint" style={{ margin: 0 }}>
@@ -368,44 +368,35 @@ function SliderFields({ payload, onChange }: { payload: EditorPayload; onChange:
 }
 
 /**
- * Wave 2h: the question's image. A stand-in until part 2f's uploads: the picture's address (https or a page of this
- * site) and its description (alt text, required: W21); its size is read when it loads, so pins keep its proportions.
- * Pin answer: the right areas. Quiz and type answer: an optional picture that may uncover bit by bit (W30).
+ * Wave 2h on 2f's pictures (wave2-contract.md section 5.2): a pin question is answered on the question's own picture,
+ * added with the picture field above (upload, preview, description); typed addresses are not used. Pin answer: the
+ * right areas, drawn on that picture in its own proportions. Quiz and type answer: the picture may uncover bit by bit (W30).
  */
-function ImageFields({ type, payload, onChange }: { type: string; payload: EditorPayload; onChange: (patch: EditorPayload) => void }) {
-  const id = useId();
-  const img = payload.image ?? { url: "", alt: "" };
+function ImageFields({ type, payload, picture, onChange }: {
+  type: string;
+  payload: EditorPayload;
+  picture: MediaRef | null;
+  onChange: (patch: EditorPayload) => void;
+}) {
   const needs = type === "PIN_ANSWER" || type === "DROP_PIN";
-  const setImg = (patch: Partial<typeof img>) => onChange({ image: { ...img, ...patch } });
-  const ready = img.url.trim() !== "";
+  // The picture's signed address and size come back from the upload (and from the editor API).
+  const shown = picture && picture.url ? { url: picture.url, alt: picture.alt, width: picture.width, height: picture.height } : null;
+  if (!needs && !shown) return null;
   return (
     <fieldset className="type-edits">
-      <legend>{needs ? "Image" : "Image (optional)"}</legend>
-      <div className="form-grid">
-        <div className="field">
-          <label htmlFor={id + "-url"}>Image address</label>
-          <input id={id + "-url"} type="url" maxLength={LIMITS.imageUrl} value={img.url} placeholder="https://…"
-                 aria-describedby={id + "-url-hint"} onChange={(e) => setImg({ url: e.target.value, width: undefined, height: undefined })} />
-          <p className="hint" id={id + "-url-hint"}>A secure (https) link, or a page of this site. Uploads come with image support.</p>
-        </div>
-        <div className="field">
-          <label htmlFor={id + "-alt"}>Describe the image</label>
-          <input id={id + "-alt"} type="text" maxLength={LIMITS.alt} value={img.alt} aria-describedby={id + "-alt-hint"}
-                 onChange={(e) => setImg({ alt: e.target.value })} placeholder="e.g. A map of the school farm" />
-          <p className="hint" id={id + "-alt-hint"}>Read aloud for anyone who can&apos;t see it. {img.alt.length} / {LIMITS.alt}</p>
-        </div>
-      </div>
-      {ready && (
-        // eslint-disable-next-line @next/next/no-img-element -- reads the picture's size; shown small as a preview
-        <img src={img.url} alt="" hidden onLoad={(e) => {
-          const t = e.currentTarget;
-          if (t.naturalWidth && (t.naturalWidth !== img.width || t.naturalHeight !== img.height)) setImg({ width: t.naturalWidth, height: t.naturalHeight });
-        }} />
+      <legend>{needs ? "Where players answer" : "Picture reveal"}</legend>
+      {needs && !shown && (
+        <p className="hint" style={{ margin: 0 }}>
+          Add a picture above: players {type === "PIN_ANSWER" ? "tap the right place on it" : "drop a pin on it"}.
+        </p>
       )}
-      {ready && type === "PIN_ANSWER" && (
-        <AreaEditor image={{ ...img, url: img.url.trim() }} areas={payload.areas ?? []} onChange={(areas) => onChange({ areas })} />
+      {shown && type === "PIN_ANSWER" && (
+        <AreaEditor image={shown} areas={payload.areas ?? []} onChange={(areas) => onChange({ areas })} />
       )}
-      {ready && (type === "QUIZ" || type === "TYPE_ANSWER") && (
+      {shown && type === "DROP_PIN" && (
+        <p className="hint" style={{ margin: 0 }}>Players drop a pin anywhere on the picture; you see every pin after the question closes.</p>
+      )}
+      {shown && (type === "QUIZ" || type === "TYPE_ANSWER") && (
         <label className="check">
           <input type="checkbox" checked={payload.reveal === true} onChange={(e) => onChange({ reveal: e.target.checked })} />
           <span>Uncover the picture bit by bit <span className="muted">(five steps over the time limit)</span></span>

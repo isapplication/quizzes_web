@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blank, fromServer, imageProblem, insideArea, missing, pickOf, revealStep, scored, toServer } from "../../lib/questionTypes";
+import { blank, fromServer, insideArea, missing, pickOf, revealStep, scored, toServer } from "../../lib/questionTypes";
 
 /** Wave 2 question types in the editor and screens (wave2-contract.md). */
 describe("Wave 2 question types", () => {
@@ -24,25 +24,35 @@ describe("Wave 2 question types", () => {
     expect(fromServer({ type: "SCALE", payload: { min: 1, max: 5, lowLabel: "a", highLabel: "b" } }).payload.max).toBe(5);
   });
 
-  it("an image question needs a secure image with alt text, and a pin answer its areas", () => {
-    expect(imageProblem(null)).toBe("Add an image.");
-    expect(imageProblem({ url: "http://x.test/a.png", alt: "A" })).toContain("secure");
-    expect(imageProblem({ url: "//x.test/a.png", alt: "A" })).toContain("secure");
-    expect(imageProblem({ url: "/img/a.png", alt: "" })).toContain("alt text");
+  // Since the 2h/2f join the picture is the question's own upload ({mediaId, alt}), never a typed address.
+  it("an image question needs an uploaded picture with a description, and a pin answer its areas", () => {
     const pin = { ...blank("PIN_ANSWER"), text: "Tap the barn" };
-    pin.payload = { image: { url: "/img/a.png", alt: "A farm" }, areas: [] };
+    pin.payload = { areas: [{ x: 0.5, y: 0.5, r: 0.1 }] };
+    expect(missing(pin)).toBe("Add a picture to answer on.");
+    pin.image = { mediaId: "m-1", alt: "", url: "/api/v1/media/m-1?e=1&s=2", width: 800, height: 400 };
+    expect(missing(pin)).toBe("Describe the question's picture in a few words, for people who can't see it.");
+    pin.image = { ...pin.image, alt: "A farm" };
+    pin.payload = { areas: [] };
     expect(missing(pin)).toBe("Mark the right area on the image.");
-    pin.payload = { ...pin.payload, areas: [{ x: 0.123456, y: 0.5, r: 0.1 }] };
+    pin.payload = { areas: [{ x: 0.123456, y: 0.5, r: 0.1 }] };
     expect(missing(pin)).toBeNull();
-    expect(toServer(pin).payload).toEqual({ image: { url: "/img/a.png", alt: "A farm" }, areas: [{ x: 0.1235, y: 0.5, r: 0.1 }] });
+    const wire = toServer(pin);
+    expect(wire.payload).toEqual({ areas: [{ x: 0.1235, y: 0.5, r: 0.1 }] });
+    expect(wire.image).toEqual({ mediaId: "m-1", alt: "A farm" });
+    // An old typed address in a saved payload is not read back into the editor.
+    const back = fromServer({ type: "PIN_ANSWER", payload: { image: { url: "https://x.test/a.png", alt: "A" }, areas: [] } });
+    expect(back.payload).toEqual({ areas: [] });
+    expect(back.image).toBeNull();
   });
 
-  it("a quiz keeps an optional image and its reveal flag", () => {
+  it("a quiz keeps an optional picture and its reveal flag", () => {
     const q = { ...blank("QUIZ"), text: "Who?", choices: ["A", "B"], correctIndexes: [0] };
-    q.payload = { image: { url: "/img/a.png", alt: "A face", width: 400, height: 300 }, reveal: true };
+    q.payload = { reveal: true };
+    expect(missing(q)).toBe("Add a picture to uncover, or untick Uncover.");
+    q.image = { mediaId: "m-2", alt: "A face", url: "/api/v1/media/m-2?e=1&s=2", width: 400, height: 300 };
     expect(missing(q)).toBeNull();
-    expect(toServer(q).payload).toEqual({ image: { url: "/img/a.png", alt: "A face", width: 400, height: 300 }, reveal: true });
-    expect(missing({ ...q, payload: { reveal: true } })).toBe("Add an image.");
+    expect(toServer(q).payload).toEqual({ reveal: true });
+    expect(toServer(q).image).toEqual({ mediaId: "m-2", alt: "A face" });
     expect(fromServer({ type: "QUIZ", choices: ["A", "B"], correctIndexes: [0], payload: {} }).payload).toEqual({});
   });
 

@@ -23,11 +23,16 @@ export const REVEAL_TYPES: QType[] = ["QUIZ", "TYPE_ANSWER"];
  * A question's image (Wave 2h). A stand-in until part 2f's uploads join it: an address (https, or a path on this
  * site) and alt text (W21), with the picture's size so pins and circles keep its proportions.
  */
+/**
+ * A question's picture as the screens draw it: the signed address, the description and the size (pins keep its
+ * proportions). Since the 2h/2f join it is always the question's uploaded picture ({@code mediaId}), never a typed address.
+ */
 export interface QuestionImage {
   url: string;
   alt: string;
   width?: number | null;
   height?: number | null;
+  mediaId?: string;
 }
 
 /** A pin-answer circle: the centre as a share of the image's width and height, the radius as a share of its width. */
@@ -109,7 +114,6 @@ export const LIMITS = {
   cloudWord: 20,
   openText: 250,
   alt: 120,
-  imageUrl: 1000,
   maxAreas: 3,
   idea: 40,
   maxIdeas: 3,
@@ -142,8 +146,7 @@ export interface EditorPayload {
   /** SCALE: the label at each end (min and max are above). */
   lowLabel?: string;
   highLabel?: string;
-  /** Wave 2h: the image (pin answer, drop pin; optional on quiz and type answer), circles, and reveal. */
-  image?: QuestionImage | null;
+  /** Wave 2h: a pin answer's circles, and reveal (quiz, type answer). The picture is the question's own {@code image} (2f). */
   areas?: PinArea[];
   reveal?: boolean;
   /** Wave 2i: each brainstorm round's time in seconds. */
@@ -234,9 +237,9 @@ export function blank(type: QType): EditorQuestion {
     case "OPEN_ENDED":
       return { ...base, timeLimitSeconds: 60 };
     case "PIN_ANSWER":
-      return { ...base, timeLimitSeconds: 30, payload: { image: null, areas: [] } };
+      return { ...base, timeLimitSeconds: 30, payload: { areas: [] } };
     case "DROP_PIN":
-      return { ...base, timeLimitSeconds: 30, payload: { image: null } };
+      return { ...base, timeLimitSeconds: 30 };
     case "BRAINSTORM":
       return { ...base, payload: { ideaSeconds: 120, voteSeconds: 30 } };
   }
@@ -281,15 +284,12 @@ export function fromServer(raw: Record<string, unknown>): EditorQuestion {
     Object.assign(payload, { min: num(p.min), max: num(p.max), step: num(p.step), answer: num(p.answer), tol: num(p.tol),
       unit: typeof p.unit === "string" ? p.unit : "" });
   }
-  const img = p.image && typeof p.image === "object" ? p.image as Record<string, unknown> : null;
-  if (IMAGE_TYPES.includes(type) || (REVEAL_TYPES.includes(type) && img)) {
-    payload.image = img ? { url: String(img.url ?? ""), alt: String(img.alt ?? ""), width: num(img.width) ?? undefined,
-      height: num(img.height) ?? undefined } : null;
+  if (IMAGE_TYPES.includes(type) || REVEAL_TYPES.includes(type)) {
     if (type === "PIN_ANSWER") {
       payload.areas = Array.isArray(p.areas) ? (p.areas as Record<string, unknown>[])
         .map((a) => ({ x: num(a.x) ?? 0.5, y: num(a.y) ?? 0.5, r: num(a.r) ?? 0.1 })) : [];
     }
-    if (REVEAL_TYPES.includes(type)) payload.reveal = p.reveal === true;
+    if (REVEAL_TYPES.includes(type) && p.reveal === true) payload.reveal = true;
   }
   if (type === "BRAINSTORM") Object.assign(payload, { ideaSeconds: num(p.ideaSeconds) ?? 120, voteSeconds: num(p.voteSeconds) ?? 30 });
   if (type === "SCALE") {
@@ -429,7 +429,7 @@ export function toServer(q: EditorQuestion) {
     case "DROP_PIN":
       choices = [];
       correctIndexes = [];
-      payload = { image: imageOut(q.payload.image) };
+      payload = {};
       if (q.type === "PIN_ANSWER") payload.areas = (q.payload.areas ?? []).map(roundArea);
       break;
     case "POLL":
@@ -440,8 +440,8 @@ export function toServer(q: EditorQuestion) {
       choices = ["True", "False"];
       break;
   }
-  if (REVEAL_TYPES.includes(q.type) && q.payload.image && q.payload.image.url.trim()) {
-    payload = { ...payload, image: imageOut(q.payload.image), reveal: q.payload.reveal === true };
+  if (REVEAL_TYPES.includes(q.type) && q.payload.reveal === true && q.image) {
+    payload = { ...payload, reveal: true };
   }
   return {
     type: q.type,
@@ -537,10 +537,7 @@ export function missing(raw: EditorQuestion): string | null {
   if (pictureIssue) return pictureIssue;
   if (q.text.length > LIMITS.question) return `Shorten the question to ${LIMITS.question} characters or fewer.`;
 
-  if (REVEAL_TYPES.includes(q.type) && (raw.payload.reveal || raw.payload.image?.url.trim())) {
-    const problem = imageProblem(raw.payload.image);
-    if (problem) return problem;
-  }
+  if (REVEAL_TYPES.includes(q.type) && raw.payload.reveal && !raw.image) return "Add a picture to uncover, or untick Uncover.";
 
   if (CHOICE_TYPES.includes(q.type)) {
     const undescribed = (raw.choiceImages ?? []).findIndex((m) => m && !m.alt.trim());
@@ -621,8 +618,8 @@ export function missing(raw: EditorQuestion): string | null {
     return null;
   }
   if (IMAGE_TYPES.includes(q.type)) {
-    const problem = imageProblem(raw.payload.image);
-    if (problem) return problem;
+    // The picture to answer on is the question's own upload (its description is checked with every picture above).
+    if (!raw.image) return "Add a picture to answer on.";
     if (q.type === "PIN_ANSWER") {
       const areas = raw.payload.areas ?? [];
       if (areas.length === 0) return "Mark the right area on the image.";
@@ -720,27 +717,9 @@ export function outcomeOf(r: { answered: boolean; correct: boolean; fraction?: n
   return fraction > 0 ? "partial" : "wrong";
 }
 
-/** A question's image as sent to the server: the address and alt text trimmed, the size kept when known. */
-function imageOut(img: QuestionImage | null | undefined) {
-  if (!img) return null;
-  return { url: img.url.trim(), alt: img.alt.trim(), ...(img.width ? { width: img.width } : {}), ...(img.height ? { height: img.height } : {}) };
-}
-
 function roundArea(a: PinArea): PinArea {
   const r4 = (v: number) => Math.round(v * 10000) / 10000;
   return { x: r4(a.x), y: r4(a.y), r: r4(a.r) };
-}
-
-/** What is missing from a question's image (an address that is https or on this site, and alt text); null when fine. */
-export function imageProblem(img: QuestionImage | null | undefined): string | null {
-  if (!img || !img.url.trim()) return "Add an image.";
-  const url = img.url.trim();
-  if (!(url.startsWith("https://") || (url.startsWith("/") && !url.startsWith("//")))) {
-    return "Use a secure image address (https) or one from this site.";
-  }
-  if (!img.alt.trim()) return "Describe the image for people who can't see it (alt text).";
-  if (img.alt.trim().length > LIMITS.alt) return `Shorten the image description to ${LIMITS.alt} characters or fewer.`;
-  return null;
 }
 
 /** Is the point inside the circle, judged in the image's proportions (as the server judges it, W28)? */
