@@ -383,7 +383,7 @@ function Studio() {
                 ) : editing === index ? (
                   <div className="stack">
                     <QuestionForm index={index} q={it.q} total={items.length} problem={missing(it.q)} subject={runSubject}
-                                  types={lessonRun ? LESSON_TYPES : WRITABLE}
+                                  types={lessonRun ? LESSON_TYPES : WRITABLE} pictures={false}
                                   onChange={(patch) => update(index, patch)}
                                   onType={(t) => update(index, changeType(it.q, t))}
                                   onMove={(by) => move(index, by)}

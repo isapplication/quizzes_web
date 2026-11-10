@@ -16,7 +16,7 @@ import {
  * answers with one or several marked right, accepted texts, the slider's scale, the puzzle's items in the right order,
  * or a slide's title and text. The checks that stop publishing are in lib/questionTypes.ts {@code missing}.
  */
-export function QuestionForm({ index, q, total, problem, grade, subject, types, onChange, onType, onMove, onCopy, onRemove }: {
+export function QuestionForm({ index, q, total, problem, grade, subject, types, pictures = true, onChange, onType, onMove, onCopy, onRemove }: {
   index: number;
   q: EditorQuestion;
   total: number;
@@ -32,6 +32,8 @@ export function QuestionForm({ index, q, total, problem, grade, subject, types, 
   subject?: string;
   /** The types offered in the type picker; every type when not given. */
   types?: QType[];
+  /** Picture fields (2f); off where the pictures are not saved (AI Studio's review, whose publish carries none). */
+  pictures?: boolean;
 }) {
   const id = useId();
   const slide = q.type === "SLIDE";
@@ -74,14 +76,16 @@ export function QuestionForm({ index, q, total, problem, grade, subject, types, 
         <p className="hint">{q.text.length} / {max}</p>
       </div>
 
-      <div className="field">
-        <span className="field-label" id={id + "-picture"}>Picture (optional)</span>
-        <PictureField label={slide ? "the slide" : "the question"} value={q.image} onChange={(image) => onChange({ image })} />
-      </div>
+      {pictures && (
+        <div className="field">
+          <span className="field-label" id={id + "-picture"}>Picture (optional)</span>
+          <PictureField label={slide ? "the slide" : "the question"} value={q.image} onChange={(image) => onChange({ image })} />
+        </div>
+      )}
       {slide && <VideoFields video={q.payload.video ?? null} onChange={(video) => setPayload({ video })} />}
 
       {(q.type === "QUIZ" || q.type === "TRUE_FALSE" || q.type === "MULTI_SELECT" || q.type === "POLL") && (
-        <ChoiceFields q={q} onChange={onChange} />
+        <ChoiceFields q={q} onChange={onChange} pictures={pictures} />
       )}
       {q.type === "TYPE_ANSWER" && <AcceptFields accept={q.payload.accept ?? [""]} onChange={(accept) => setPayload({ accept })} />}
       {q.type === "SLIDER" && <SliderFields payload={q.payload} onChange={setPayload} />}
@@ -172,7 +176,11 @@ export function QuestionForm({ index, q, total, problem, grade, subject, types, 
 }
 
 /** Answers for quiz, true/false, multi-select and poll: 2 to 6, each with its shape; radios, checkboxes or no mark. */
-function ChoiceFields({ q, onChange }: { q: EditorQuestion; onChange: (patch: Partial<EditorQuestion>) => void }) {
+function ChoiceFields({ q, onChange, pictures: withPictures }: {
+  q: EditorQuestion;
+  onChange: (patch: Partial<EditorQuestion>) => void;
+  pictures: boolean;
+}) {
   const id = useId();
   const one = q.type === "QUIZ" || q.type === "TRUE_FALSE";
   const many = q.type === "MULTI_SELECT";
@@ -228,7 +236,7 @@ function ChoiceFields({ q, onChange }: { q: EditorQuestion; onChange: (patch: Pa
             {editable && q.choices.length > LIMITS.minChoices && (
               <button type="button" className="answer-edit-remove" aria-label={"Remove answer " + (i + 1)} onClick={() => removeChoice(i)}>×</button>
             )}
-            {editable && (
+            {editable && withPictures && (
               <div className="answer-edit-picture">
                 <PictureField compact label={"answer " + (i + 1)} value={pictures[i]} onChange={(p) => setPicture(i, p)} />
               </div>
