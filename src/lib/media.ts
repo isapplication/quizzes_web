@@ -5,7 +5,10 @@
  */
 import { api } from "./api";
 
-/** A picture as the Quiz API sends it: {@code url}, {@code width} and {@code height} are missing while it is only stored. */
+/**
+ * A picture as the Quiz API sends it: {@code url}, {@code width} and {@code height} are missing while it is only stored.
+ * {@code removed} is true when its teacher or a school admin removed it (decision O3): no address, only its words.
+ */
 export interface MediaRef {
   mediaId: string;
   /** A description for screen readers and read-aloud (required, up to 120 characters). */
@@ -13,14 +16,27 @@ export interface MediaRef {
   url?: string | null;
   width?: number | null;
   height?: number | null;
+  removed?: boolean | null;
 }
 
-/** What the game server and the assignment page send with a question: the address is always there. */
+/**
+ * What the game server and the assignment page send with a question: the address is there, unless the picture was
+ * removed ({@code removed: true}, then {@code url} is empty and screens show "Picture removed" with the alt text).
+ */
 export interface ShownPicture {
   url: string;
   alt: string;
   width?: number | null;
   height?: number | null;
+  removed?: boolean;
+}
+
+/** Shown in place of a picture that was removed. */
+export const PICTURE_REMOVED = "Picture removed";
+
+/** Whether this picture can't be drawn because it was removed (or arrived without an address). */
+export function isRemoved(p: { url?: string | null; removed?: boolean | null } | null | undefined): boolean {
+  return !!p && (p.removed === true || !p.url);
 }
 
 export const PICTURE = {
@@ -56,10 +72,71 @@ export function uploadPicture(file: File): Promise<Uploaded> {
   return api<Uploaded>("/api/v1/media", { method: "POST", body });
 }
 
-/** Only pictures that have an address can be shown. */
+/** Only pictures that have an address can be shown; a removed one is shown as removed, with its words. */
 export function shown(ref: MediaRef | ShownPicture | null | undefined): ShownPicture | null {
+  if (ref && ref.removed) return { url: "", alt: ref.alt, width: ref.width, height: ref.height, removed: true };
   if (!ref || !ref.url) return null;
   return { url: ref.url, alt: ref.alt, width: ref.width, height: ref.height };
+}
+
+// ---- The "Pictures" page: a teacher's own pictures, and removing one (decision O3)
+
+/** A picture on the "Pictures" page, as {@code GET /api/v1/media} lists it. */
+export interface TeacherPicture {
+  mediaId: string;
+  width: number;
+  height: number;
+  bytes: number;
+  createdAt: string;
+  /** Who added it (null when that person is no longer in the school). */
+  addedBy: string | null;
+  /** Added by the signed-in person. */
+  mine: boolean;
+  /** How many quizzes use it, and the first few of their titles. */
+  quizzes: number;
+  quizTitles: string[];
+  url: string;
+}
+
+export type PictureScope = "mine" | "school";
+
+/** The signed-in person's pictures, or a school admin's whole school ({@code "school"}). Newest first. */
+export function listPictures(scope: PictureScope = "mine"): Promise<TeacherPicture[]> {
+  return api<TeacherPicture[]>("/api/v1/media" + (scope === "school" ? "?scope=school" : ""));
+}
+
+/** Removes a picture for good: its own teacher, or a school admin. */
+export function removePicture(mediaId: string): Promise<void> {
+  return api<void>("/api/v1/media/" + encodeURIComponent(mediaId), { method: "DELETE" });
+}
+
+/** What removing a picture changes, in the words the confirm step shows. */
+export function removalWarning(p: Pick<TeacherPicture, "quizzes" | "quizTitles">): string {
+  const where = p.quizzes === 0
+    ? "No quiz uses it now."
+    : "Questions in " + quizList(p.quizzes, p.quizTitles) + " will show \u201c" + PICTURE_REMOVED + "\u201d and its description instead.";
+  return where + " Phones and browsers that already opened it may still show it for up to 48 hours, until their"
+    + " links expire. This can't be undone.";
+}
+
+function quizList(count: number, titles: string[]): string {
+  const named = titles.slice(0, Math.min(titles.length, 3)).map((t) => "\u201c" + t + "\u201d");
+  const rest = count - named.length;
+  if (named.length === 0) return count === 1 ? "1 quiz" : count + " quizzes";
+  if (rest > 0) return named.join(", ") + " and " + rest + (rest === 1 ? " other quiz" : " other quizzes");
+  if (named.length === 1) return named[0];
+  return named.slice(0, -1).join(", ") + " and " + named[named.length - 1];
+}
+
+/** "Used in 2 quizzes", or "Not used in a quiz". */
+export function usedIn(quizzes: number): string {
+  return quizzes === 0 ? "Not used in a quiz" : "Used in " + quizzes + (quizzes === 1 ? " quiz" : " quizzes");
+}
+
+/** A file size in plain words: "84 KB", "1.2 MB". */
+export function fileSize(bytes: number): string {
+  if (bytes < 1024 * 1024) return Math.max(1, Math.round(bytes / 1024)) + " KB";
+  return (bytes / 1024 / 1024).toFixed(1) + " MB";
 }
 
 /** An answer's visible label: its text, unless it is only the picture's description (the server fills that in for reports). */

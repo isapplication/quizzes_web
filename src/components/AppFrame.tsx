@@ -78,6 +78,7 @@ function TopBar() {
             <Link href="/library">Library</Link>
             <Link href="/teacher/studio">AI Studio</Link>
             <Link href="/teacher/reports">Reports</Link>
+            <Link href="/teacher/pictures">Pictures</Link>
           </>
         ) : (
           !me.platformTeam && <Link href="/play">Join a game</Link>

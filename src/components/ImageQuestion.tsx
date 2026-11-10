@@ -1,6 +1,7 @@
 "use client";
 
 import { type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode, useEffect, useId, useRef, useState } from "react";
+import { PICTURE_REMOVED } from "@/lib/media";
 import { insideArea, LIMITS, type PinArea, type QuestionImage, revealStep } from "@/lib/questionTypes";
 
 /**
@@ -21,8 +22,14 @@ function ImageBox({ image, children }: { image: QuestionImage; children?: ReactN
   const ratio = image.width && image.height ? `${image.width} / ${image.height}` : undefined;
   return (
     <div className="qimg" style={ratio ? { aspectRatio: ratio } : undefined}>
-      {/* eslint-disable-next-line @next/next/no-img-element -- a teacher's image at any address (stand-in until 2f) */}
-      <img src={image.url} alt={image.alt} draggable={false} />
+      {image.url ? (
+        // eslint-disable-next-line @next/next/no-img-element -- the question's own picture, a signed same-origin link (2f)
+        <img src={image.url} alt={image.alt} draggable={false} />
+      ) : (
+        // Removed by its teacher (decision O3): the place stays, with its words.
+        <span className="picture-removed"><span className="picture-removed-label">{PICTURE_REMOVED}</span>
+          <span className="picture-removed-alt">{image.alt}</span></span>
+      )}
       {children}
     </div>
   );
