@@ -2,13 +2,15 @@
 
 import { type ClipboardEvent, type DragEvent, useId, useRef, useState } from "react";
 import { ApiError } from "@/lib/api";
-import { type MediaRef, PICTURE, pictureProblem, uploadPicture } from "@/lib/media";
+import { type MediaRef, PICTURE, PICTURE_REMOVED, pictureProblem, uploadPicture } from "@/lib/media";
 
 /**
  * Adds a picture to a question, an answer or a slide (wave2-plan.md part 2f): choose a file, drop one on the box, or paste
  * one while the box is focused. The file is checked here for the wrong kind or size (in plain words) and again by the
  * server, which writes it again without location data. A picture needs a short description (alt text) before the
- * question can be published; Remove takes it off the question (the file stays in the school's pictures).
+ * question can be published; Remove takes it off the question (the file stays in the school's pictures, where its
+ * teacher can remove it for good on the Pictures page). A picture removed there shows "Picture removed" here, to be
+ * replaced or taken off.
  */
 export function PictureField({ label, value, onChange, compact = false }: {
   /** What the picture is for, in words that finish "the picture of …": "the question", "answer 2". */
@@ -65,7 +67,9 @@ export function PictureField({ label, value, onChange, compact = false }: {
              onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; void take(f); }} />
       {value ? (
         <div className="picture-field-has">
-          {value.url ? (
+          {value.removed ? (
+            <span className="picture-field-preview picture-field-gone">{PICTURE_REMOVED}</span>
+          ) : value.url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img className="picture-field-preview" src={value.url} alt={value.alt} width={value.width ?? undefined} height={value.height ?? undefined} />
           ) : (
@@ -80,6 +84,9 @@ export function PictureField({ label, value, onChange, compact = false }: {
             <p className="hint" id={id + "-alt-hint"}>
               Required. Read out by screen readers and read-aloud. {value.alt.length} / {PICTURE.maxAlt}
             </p>
+            {value.removed && (
+              <p className="hint">This picture was removed from your school&apos;s pictures. Replace it, or remove it from {label}.</p>
+            )}
             <div className="row" style={{ gap: 6 }}>
               <button type="button" className="btn btn-light" disabled={busy} onClick={() => input.current?.click()}>
                 {busy ? "Adding…" : "Replace"}
