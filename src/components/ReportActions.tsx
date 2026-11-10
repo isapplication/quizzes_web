@@ -1,10 +1,10 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { api, ApiError, downloadFile } from "@/lib/api";
+import { ApiError, downloadFile } from "@/lib/api";
 import { countOf } from "@/lib/reports";
 import { AiReteachButton } from "@/components/AiReteachButton";
+import { ReteachButton } from "@/components/ReteachButton";
 
 /**
  * What a teacher takes from a game's report or an assignment's results (wave3-plan.md, 3a): the CSV and the Excel file,
@@ -23,7 +23,6 @@ export function ReportActions({ filePath, fileName, reteachPath, aiReteachPath, 
   hard: number;
   onError: (message: string) => void;
 }) {
-  const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const clean = fileName.replace(/[^\w -]+/g, "").trim() || "results";
 
@@ -37,23 +36,11 @@ export function ReportActions({ filePath, fileName, reteachPath, aiReteachPath, 
     setBusy(null);
   }
 
-  async function reteach() {
-    setBusy("reteach");
-    try {
-      const made = await api<{ quizId: string }>(reteachPath, { method: "POST" });
-      router.push("/teacher/quiz/" + made.quizId + "/edit");
-    } catch (e) {
-      onError(e instanceof ApiError ? e.message : "Quizplayo could not make the re-teach quiz. Please try again.");
-      setBusy(null);
-    }
-  }
-
   return (
     <div className="row" style={{ gap: 8 }}>
       <button type="button" className="btn btn-light" onClick={() => download("csv")} disabled={busy !== null}>Download CSV</button>
       <button type="button" className="btn btn-light" onClick={() => download("xlsx")} disabled={busy !== null}>Download Excel</button>
-      <button type="button" className="btn btn-primary" onClick={reteach} disabled={busy !== null || hard === 0}
-              aria-describedby="reteach-hint">Make a re-teach quiz</button>
+      <ReteachButton path={reteachPath} hard={hard} onError={onError} describedBy="reteach-hint" />
       <AiReteachButton path={aiReteachPath} hard={hard} onError={onError} />
       <span id="reteach-hint" className="muted">
         {hard === 0 ? "No question was under 35% right."

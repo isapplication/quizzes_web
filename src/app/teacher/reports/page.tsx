@@ -6,12 +6,13 @@ import { Suspense, useEffect, useId, useRef, useState } from "react";
 import { AppFrame } from "@/components/AppFrame";
 import { Trend } from "@/components/Trend";
 import { AiReteachButton } from "@/components/AiReteachButton";
+import { ReteachButton } from "@/components/ReteachButton";
 import { ClassSummary } from "@/components/ClassSummary";
 import { EmptyState, LoadingState, PageHeader } from "@/components/ui/States";
 import { api, ApiError, downloadFile } from "@/lib/api";
 import { isSchoolAdmin, useMe } from "@/lib/me";
 import {
-  ClassReport, countOf, defaultRange, percentTone, QuestionAccuracy, rangeQuery, SchoolReport, sourceLink, StudentRow, withQuery,
+  ClassReport, classReteachPaths, countOf, defaultRange, percentTone, QuestionAccuracy, rangeQuery, SchoolReport, sourceLink, StudentRow, withQuery,
 } from "@/lib/reports";
 import { QTYPE_LABEL, type QType } from "@/lib/questionTypes";
 
@@ -133,7 +134,7 @@ function Reports() {
             <>
               <ClassSummary classCode={chosen} query={query} />
               <ReportTabs tab={tab} setTab={setTab} report={report}
-                          reteachPath={withQuery("/api/v1/reports/classes/" + encodeURIComponent(chosen) + "/reteach-ai", query)}
+                          reteach={classReteachPaths(chosen, query)}
                           onError={setError} />
             </>
           )}
@@ -143,8 +144,8 @@ function Reports() {
   );
 }
 
-function ReportTabs({ tab, setTab, report, reteachPath, onError }: {
-  tab: TabId; setTab: (t: TabId) => void; report: ClassReport; reteachPath: string; onError: (message: string) => void;
+function ReportTabs({ tab, setTab, report, reteach, onError }: {
+  tab: TabId; setTab: (t: TabId) => void; report: ClassReport; reteach: ReteachPaths; onError: (message: string) => void;
 }) {
   const id = useId();
   const refs = useRef<Record<string, HTMLButtonElement | null>>({});
@@ -179,7 +180,7 @@ function ReportTabs({ tab, setTab, report, reteachPath, onError }: {
         {tab === "help" && (report.needsHelp.length === 0
           ? <EmptyState title="Nobody needs help right now">No student is under 50% over their last 5 games or assignments in these days.</EmptyState>
           : <StudentsTable rows={report.needsHelp} caption="Students under 50% over their last five scored games or assignments" />)}
-        {tab === "hard" && <HardQuestions rows={report.overview.difficult} reteachPath={reteachPath} onError={onError} />}
+        {tab === "hard" && <HardQuestions rows={report.overview.difficult} reteach={reteach} onError={onError} />}
         {tab === "standard" && <ByStandard report={report} />}
       </div>
     </div>
@@ -213,15 +214,19 @@ function StudentsTable({ rows, caption }: { rows: StudentRow[]; caption: string 
   );
 }
 
-function HardQuestions({ rows, reteachPath, onError }: { rows: QuestionAccuracy[]; reteachPath: string; onError: (message: string) => void }) {
+type ReteachPaths = ReturnType<typeof classReteachPaths>;
+
+function HardQuestions({ rows, reteach, onError }: { rows: QuestionAccuracy[]; reteach: ReteachPaths; onError: (message: string) => void }) {
+  const hint = useId();
   if (rows.length === 0) {
     return <EmptyState title="No difficult questions">No question was under 35% fully right, with at least two answers, in these days.</EmptyState>;
   }
   return (
     <>
       <div className="row reteach-row">
-        <AiReteachButton path={reteachPath} hard={rows.length} onError={onError} className="btn btn-primary" />
-        <span className="muted">AI drafts new questions like {rows.length === 1 ? "this one" : "these " + rows.length} for you to review in AI Studio. It counts towards your school&apos;s monthly AI limit.</span>
+        <ReteachButton path={reteach.reteach} hard={rows.length} onError={onError} describedBy={hint} />
+        <AiReteachButton path={reteach.aiReteach} hard={rows.length} onError={onError} />
+        <span id={hint} className="muted">Copies {rows.length === 1 ? "this question" : "these " + rows.length + " questions"} into a new draft quiz, or AI drafts new ones like them for you to review in AI Studio (that counts towards your school&apos;s monthly AI limit).</span>
       </div>
       <ol className="question-list">
         {rows.map((q) => <HardQuestion key={q.questionId} q={q} />)}
