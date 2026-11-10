@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  countOf, defaultRange, hardQuestions, HARD_BELOW, isoDay, NEEDS_HELP_BELOW, percentTone, rangeQuery, sourceLink, withQuery,
+  classReteachPaths, countOf, defaultRange, hardQuestions, HARD_BELOW, isoDay, NEEDS_HELP_BELOW, percentTone, rangeQuery, sourceLink, withQuery,
 } from "../../lib/reports";
 import { changeType, fromServer, standardCode, standardOk, toServer } from "../../lib/questionTypes";
 import type { ReportQuestion } from "../../components/QuestionResult";
@@ -20,6 +20,16 @@ describe("the report range", () => {
     expect(rangeQuery({ from: "yesterday", to: "" })).toBe("");
     expect(withQuery("/api/v1/reports/school", "")).toBe("/api/v1/reports/school");
     expect(withQuery("/api/v1/reports/school", "from=2026-09-01")).toBe("/api/v1/reports/school?from=2026-09-01");
+  });
+
+  it("gives a class report both re-teach addresses for its days", () => {
+    expect(classReteachPaths("8B", "")).toEqual({
+      reteach: "/api/v1/reports/classes/8B/reteach", aiReteach: "/api/v1/reports/classes/8B/reteach-ai",
+    });
+    expect(classReteachPaths("8 B/1", "from=2026-09-01&to=2026-09-30")).toEqual({
+      reteach: "/api/v1/reports/classes/8%20B%2F1/reteach?from=2026-09-01&to=2026-09-30",
+      aiReteach: "/api/v1/reports/classes/8%20B%2F1/reteach-ai?from=2026-09-01&to=2026-09-30",
+    });
   });
 });
 

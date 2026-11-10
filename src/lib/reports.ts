@@ -127,6 +127,15 @@ export function withQuery(path: string, query: string): string {
   return query ? path + "?" + query : path;
 }
 
+/**
+ * A class report's re-teach addresses for its days: "Make a re-teach quiz" (a plain copy of the difficult questions into
+ * a draft) and "Re-teach with AI", as a game's and an assignment's report have them.
+ */
+export function classReteachPaths(classCode: string, query: string): { reteach: string; aiReteach: string } {
+  const base = "/api/v1/reports/classes/" + encodeURIComponent(classCode);
+  return { reteach: withQuery(base + "/reteach", query), aiReteach: withQuery(base + "/reteach-ai", query) };
+}
+
 /** How an accuracy reads at a glance: under the needs-help line, in between, or good. */
 export function percentTone(percent: number): "ok" | "warn" | "danger" {
   return percent >= 70 ? "ok" : percent >= NEEDS_HELP_BELOW ? "warn" : "danger";
