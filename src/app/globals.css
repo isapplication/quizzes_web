@@ -1087,3 +1087,12 @@ input[type=email], input[type=tel], input[type=password], input[type=search] {
 .pick-list label:has(input:checked) { border-color: var(--pc); background: var(--plc); }
 .pick-list input { inline-size: 18px; block-size: 18px; margin: 2px 0 0; flex: none; accent-color: var(--pc); }
 .lti-opening { padding-block: 16px; }
+
+/* Platform console → LMS registrations (decision O4): one card per school's registration. */
+.lti-review dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 12px; margin: 0; font-size: 14px; }
+.lti-review dt { color: var(--muted); }
+.lti-review dd { margin: 0; overflow-wrap: anywhere; }
+@media (max-width: 560px) {
+  .lti-review dl { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .lti-review dd { margin-bottom: 8px; }
+}

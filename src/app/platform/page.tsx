@@ -7,6 +7,7 @@ import { AiConsole } from "@/components/AiConsole";
 import { EmailConsole } from "@/components/EmailConsole";
 import { LibraryConsole } from "@/components/LibraryConsole";
 import { LocationSettings } from "@/components/LocationSettings";
+import { LtiApprovals } from "@/components/LtiApprovals";
 import { AppFrame } from "@/components/AppFrame";
 import { api, ApiError } from "@/lib/api";
 import { useMe } from "@/lib/me";
@@ -34,11 +35,12 @@ interface SignUpDay {
   schools: number;
 }
 
-type Tab = "workspaces" | "sign-ups" | "library" | "ai" | "emails" | "settings";
+type Tab = "workspaces" | "sign-ups" | "lms" | "library" | "ai" | "emails" | "settings";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "workspaces", label: "Schools and teachers" },
   { id: "sign-ups", label: "Sign-ups" },
+  { id: "lms", label: "LMS registrations" },
   { id: "library", label: "Library" },
   { id: "ai", label: "AI use" },
   { id: "emails", label: "Emails" },
@@ -82,7 +84,7 @@ function PlatformConsole() {
 
   return (
     <div className="stack">
-      <PageHeader title="Platform console" description="Everyone who signed up, sign-ups per day, the shared library, and product settings." />
+      <PageHeader title="Platform console" description="Everyone who signed up, sign-ups per day, schools' LMS registrations to approve, the shared library, and product settings." />
       <div className="tabs" role="tablist">
         {TABS.map((t) => (
           <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} className={tab === t.id ? "active" : undefined}
@@ -92,9 +94,10 @@ function PlatformConsole() {
         ))}
       </div>
       {error && <div className="alert alert-danger" role="alert">{error}</div>}
-      {notice && <div className="alert alert-success">{notice}</div>}
+      {notice && <div className="alert alert-success" role="status">{notice}</div>}
       {tab === "workspaces" && <Workspaces plans={plans} onError={setError} onNotice={setNotice} />}
       {tab === "sign-ups" && <SignUps onError={setError} />}
+      {tab === "lms" && <LtiApprovals onError={setError} onNotice={setNotice} />}
       {tab === "library" && <LibraryConsole onError={setError} onNotice={setNotice} />}
       {tab === "ai" && (
         <>

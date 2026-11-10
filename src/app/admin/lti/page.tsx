@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AppFrame } from "@/components/AppFrame";
 import { ScoreDelivery } from "@/components/ScoreDelivery";
 import { api, ApiError } from "@/lib/api";
+import { registrationStatus, savedNotice, type RegistrationStatus } from "@/lib/lti";
 import { isIndependent, isSchoolAdmin, useMe } from "@/lib/me";
 import { EmptyState, LoadingState, PageHeader } from "@/components/ui/States";
 
@@ -20,6 +21,11 @@ interface Platform {
   keysetUrl: string;
   enabled: boolean;
   updatedAt: string;
+  /** O4: the Quizplayo platform team approves a registration before it is used. */
+  status: RegistrationStatus;
+  /** The platform team's reason, when it was rejected. */
+  reviewNote: string | null;
+  reviewedAt: string | null;
 }
 
 interface Settings {
@@ -101,13 +107,14 @@ function Lti() {
       .catch((e: unknown) => setError(e instanceof ApiError ? e.message : "Quizplayo could not load your LMS settings."));
   }, [allowed]);
 
-  async function run(step: string, path: string, method: string, body: unknown, done: string) {
+  async function run(step: string, path: string, method: string, body: unknown, done: string | ((s: Settings) => string)) {
     setBusy(step);
     setError(null);
     setNotice(null);
     try {
-      show(await api<Settings>(path, { method, body }));
-      setNotice(done);
+      const saved = await api<Settings>(path, { method, body });
+      show(saved);
+      setNotice(typeof done === "string" ? done : done(saved));
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "That did not work. Please try again.");
     }
@@ -126,7 +133,7 @@ function Lti() {
       name: form.name.trim(), issuer: form.issuer.trim(), clientId: form.clientId.trim(), deploymentIds,
       authLoginUrl: form.authLoginUrl.trim(), authTokenUrl: form.authTokenUrl.trim(),
       tokenAudience: form.tokenAudience.trim() || null, keysetUrl: form.keysetUrl.trim(),
-    }, "Saved.");
+    }, (saved) => savedNotice(settings?.platform?.status, saved.platform?.status));
   }
 
   if (!allowed) {
@@ -135,6 +142,7 @@ function Lti() {
   if (!settings) return error ? <div className="alert alert-danger" role="alert">{error}</div> : <LoadingState rows={5} label="Loading" />;
   const p = settings.platform;
   const t = settings.forTheLms;
+  const review = p ? registrationStatus(p.status, p.reviewNote) : null;
   const set = (k: keyof Form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setForm({ ...form, [k]: e.target.value });
   const urlInput = { type: "url", autoCapitalize: "off", autoCorrect: "off", spellCheck: false } as const;
   const idInput = { type: "text", autoCapitalize: "off", autoCorrect: "off", spellCheck: false } as const;
@@ -143,9 +151,26 @@ function Lti() {
     <div className="stack" style={{ maxWidth: 820 }}>
       <PageHeader title="Your LMS"
                   description="Optional. Connect your school's LMS with LTI 1.3, and teachers add Quizplayo quizzes to their courses: students open them from the course, signed in, and their scores go to the LMS gradebook."
-                  action={p && <span className={"chip " + (p.enabled ? "chip-ok" : "chip-warn")}>{p.enabled ? "Switched on" : "Switched off"}</span>} />
+                  action={p && review && (
+                    <span className="row" style={{ gap: 6 }}>
+                      <span className={"chip chip-" + review.tone}>{review.label}</span>
+                      <span className={"chip " + (p.enabled ? "chip-ok" : "chip-warn")}>{p.enabled ? "Switched on" : "Switched off"}</span>
+                    </span>
+                  )} />
       {error && <div className="alert alert-danger" role="alert">{error}</div>}
       {notice && <div className="alert alert-success" role="status">{notice}</div>}
+      {p && review && (
+        <section className={"alert " + (review.tone === "ok" ? "alert-success" : review.tone === "danger" ? "alert-danger" : "alert-warning")}
+                 aria-labelledby="lti-review">
+          <strong id="lti-review">{review.label}</strong>
+          <p style={{ margin: "4px 0 0" }}>{review.message}</p>
+          {p.status === "APPROVED" && p.reviewedAt && (
+            <p className="hint" style={{ margin: "4px 0 0" }}>
+              Approved <time dateTime={p.reviewedAt}>{new Date(p.reviewedAt).toLocaleDateString()}</time>
+            </p>
+          )}
+        </section>
+      )}
 
       <section className="card stack" aria-labelledby="lti-for-lms">
         <h2 id="lti-for-lms" style={{ margin: 0 }}>1. Values for your LMS</h2>
@@ -163,7 +188,9 @@ function Lti() {
 
       <form className="card stack" onSubmit={save}>
         <h2 style={{ margin: 0 }}>2. Tell Quizplayo about your LMS</h2>
-        <p className="muted" style={{ margin: 0 }}>Your LMS shows these after you add the tool.</p>
+        <p className="muted" style={{ margin: 0 }}>
+          Your LMS shows these after you add the tool. The Quizplayo platform team approves them before they are used.
+        </p>
         <div className="form-grid">
           <div className="field">
             <label htmlFor="lti-name">Name</label>
@@ -215,14 +242,18 @@ function Lti() {
         <section className="card stack" aria-labelledby="lti-switch">
           <h2 id="lti-switch" style={{ margin: 0 }}>3. Switch it on</h2>
           <p style={{ margin: 0 }}>
-            {p.enabled
-              ? "Switched on: teachers can add Quizplayo to their courses, and students open it from the course."
-              : "Switched off: opening Quizplayo from your LMS shows a message instead. Switch it on once the values above are saved in both places."}
+            {p.enabled && p.status !== "APPROVED"
+              ? "Switched on, and it starts working once the Quizplayo platform team approves it."
+              : p.enabled
+                ? "Switched on: teachers can add Quizplayo to their courses, and students open it from the course."
+                : "Switched off: opening Quizplayo from your LMS shows a message instead. Switch it on once the values above are saved in both places."}
           </p>
           <div className="row">
             <button className={p.enabled ? "btn btn-light" : "btn btn-primary"} type="button" disabled={busy !== null}
                     onClick={() => run("enable", "/api/v1/admin/lti/enable", "POST", { enabled: !p.enabled },
-                      p.enabled ? "Switched off: opening Quizplayo from your LMS no longer signs anyone in." : "Switched on: teachers can add Quizplayo to their courses.")}>
+                      p.enabled ? "Switched off: opening Quizplayo from your LMS no longer signs anyone in."
+                        : p.status === "APPROVED" ? "Switched on: teachers can add Quizplayo to their courses."
+                          : "Switched on. It starts working once the Quizplayo platform team approves it.")}>
               {busy === "enable" ? "Saving…" : p.enabled ? "Switch off" : "Switch on"}
             </button>
           </div>

@@ -71,6 +71,14 @@ const MESSAGES: Record<string, { title: string; body: string }> = {
     title: "Your school has switched off Quizplayo in its LMS",
     body: "Your school admin connected your LMS to Quizplayo but it is switched off. Please ask them to switch it on.",
   },
+  lti_pending: {
+    title: "Your school's LMS connection is waiting for approval",
+    body: "Your school admin connected your LMS to Quizplayo, and the Quizplayo platform team checks every connection before it is used. Open Quizplayo from your course again once it's approved; your school admin sees its status in Your LMS.",
+  },
+  lti_rejected: {
+    title: "Your school's LMS connection wasn't approved",
+    body: "The Quizplayo platform team didn't approve your school's LMS connection, so Quizplayo can't open from your course yet. Please ask your school admin: they see why in Your LMS and can correct it.",
+  },
   lti_expired: {
     title: "The sign-in took too long",
     body: "Opening Quizplayo from your LMS has to finish within a few minutes. Open Quizplayo from your course again.",
