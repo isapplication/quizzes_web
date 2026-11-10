@@ -55,7 +55,7 @@ export function ScoreDelivery({ path, title, description }: { path: string; titl
       {summary && (
         <>
           <dl className="score-counts">
-            <div><dt>Scores sent</dt><dd>{summary.sent}</dd></div>
+            <div><dt>Scores sent (last 14 days)</dt><dd>{summary.sent}</dd></div>
             <div><dt>Waiting</dt><dd>{summary.waiting}</dd></div>
             <div className={summary.failed > 0 ? "failed" : undefined}>
               <dt>Failed</dt><dd>{summary.failed}{summary.failed > 0 && <span className="sr-only"> (need trying again)</span>}</dd>

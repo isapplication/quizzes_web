@@ -37,6 +37,36 @@ function TopBar() {
   const [userMenu, setUserMenu] = useState(false);
   const [unread, setUnread] = useState(0);
   const box = useRef<HTMLDivElement>(null);
+  const bar = useRef<HTMLElement>(null);
+  const [folded, setFolded] = useState(false);
+
+  // The menu folds into the ☰ button whenever its links don't fit on one line beside the school's name, at any width:
+  // a school admin who also teaches has many links, so a fixed breakpoint left them on two lines at medium widths.
+  // Measured unfolded; while folded, measured again only when the bar gets wider, so it doesn't flicker on shrink.
+  useEffect(() => {
+    const el = bar.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    let lastWidth = 0;
+    let isFolded = false;
+    const measure = () => {
+      const width = el.clientWidth;
+      const grew = width > lastWidth;
+      lastWidth = width;
+      if (isFolded && !grew) return;
+      el.classList.remove("nav-folded");
+      const nav = el.querySelector<HTMLElement>(".app-nav");
+      const brand = el.querySelector<HTMLElement>(".brand");
+      // Hidden by the narrow-screen rule (display: none): that layout already folds it.
+      const fits = !nav || !brand || nav.offsetWidth === 0
+        || (nav.offsetTop <= brand.offsetTop + 4 && nav.scrollWidth <= nav.clientWidth + 1);
+      isFolded = !fits;
+      el.classList.toggle("nav-folded", isFolded);
+      setFolded(isFolded);
+    };
+    const watch = new ResizeObserver(measure);
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, []);
 
   // Communication's unread count: on load, when the menu opens, and when the Communication page reads one.
   useEffect(() => {
@@ -59,7 +89,7 @@ function TopBar() {
   }, [userMenu]);
 
   return (
-    <header className="topbar app-topbar">
+    <header ref={bar} className={"topbar app-topbar" + (folded ? " nav-folded" : "")}>
       <Link href="/home" className="brand">
         {me.school.brand?.logoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element

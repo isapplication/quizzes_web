@@ -13,6 +13,7 @@ import { keyText, outcomeOf, pickOf } from "@/lib/questionTypes";
 import { LoadingState } from "@/components/ui/States";
 import { PinForm } from "@/components/ImageQuestion";
 import { Picture } from "@/components/Picture";
+import { isRemoved } from "@/lib/media";
 import { SlideMedia } from "@/components/live/SlideExtras";
 import { questionSpeech, ReadAloudButton } from "@/lib/readAloud";
 
@@ -97,6 +98,7 @@ export default function AssignmentPage() {
     if (!state?.question || busy || feedback) return;
     const type = state.question.type;
     const slide = (state.question.pick ?? pickOf(type)) === "none";
+    const gone = (state.question.pick ?? pickOf(type)) === "point" && isRemoved(state.question.image ?? { url: null });
     setBusy(true);
     setError(null);
     try {
@@ -104,7 +106,8 @@ export default function AssignmentPage() {
         method: "POST", body: { attemptKey: key, index: state.question.index, ...given },
       });
       setLastType(type);
-      if (type === "CARD" || slide) setState(r.state);
+      // A slide, a flashcard, or a pin question whose picture was removed has nothing to show after it.
+      if (type === "CARD" || slide || gone) setState(r.state);
       else setFeedback({ ...r, chosen: "choice" in given ? [given.choice] : "choices" in given ? given.choices : [] });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Quizplayo could not save your answer. Please try again.");
@@ -121,6 +124,7 @@ export default function AssignmentPage() {
   const q = state?.question ?? null;
   const activity = q !== null && ACTIVITY_TYPES.includes(q.type);
   const pick = q ? q.pick ?? pickOf(q.type) : "one";
+  const pinGone = pick === "point" && isRemoved(q?.image ?? { url: null });
   const outcome = feedback ? outcomeOf({ answered: true, correct: feedback.correct, fraction: feedback.fraction, counted: feedback.counted }) : null;
   const rightChoices = feedback ? feedback.correctIndexes ?? (feedback.correctIndex >= 0 ? [feedback.correctIndex] : []) : [];
   const comesBack = !!feedback?.comesBack;
@@ -253,8 +257,20 @@ export default function AssignmentPage() {
               <MultiSelectForm key={q.index} variant="stage" choices={q.choices} pictures={q.choiceImages ?? undefined} busy={busy} onSubmit={(c) => answer(typedAnswer.choices(c))} />
             )}
             {pick === "text" && <TypeAnswerForm key={q.index} variant="stage" busy={busy} onSubmit={(t) => answer(typedAnswer.text(t))} />}
-            {pick === "point" && q.image && (
+            {pick === "point" && q.image && !pinGone && (
               <PinForm key={q.index} variant="stage" image={q.image} busy={busy} onSubmit={(point) => answer(typedAnswer.point(point))} />
+            )}
+            {pick === "point" && pinGone && (
+              // Its picture was removed after the quiz was assigned (decision O3): nothing to pin on, so it is passed over.
+              <div className="activity-panel stack pin-form">
+                {q.image && <Picture picture={q.image} className="stage-q-picture" main />}
+                <p className="hint" style={{ margin: 0 }}>
+                  This question&apos;s picture was removed, so it can&apos;t be answered. It won&apos;t count for or against you.
+                </p>
+                <button type="button" className="btn btn-primary activity-check" disabled={busy} onClick={() => answer(typedAnswer.seen())}>
+                  {busy ? "Sending…" : "Go to the next question"}
+                </button>
+              </div>
             )}
             {pick === "ideas" && (
               <IdeasForm key={q.index} variant="stage" busy={busy} maxLength={q.maxLength ?? 40}

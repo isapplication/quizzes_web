@@ -536,6 +536,13 @@ input[type=email], input[type=tel], input[type=password], input[type=search] {
 .app-footer-links { display: flex; flex-wrap: wrap; gap: 14px; }
 .app-footer a { color: var(--muted); text-decoration: none; }
 .app-footer a:hover { color: var(--pc); text-decoration: underline; }
+/* Each link keeps its natural width, so the bar can tell when they no longer fit on one line (AppFrame's nav-folded). */
+.app-nav > * { flex-shrink: 0; }
+.app-nav > a { white-space: nowrap; }
+.app-topbar.nav-folded .site-menu-button { display: grid; place-items: center; }
+.app-topbar.nav-folded .app-nav { display: none; width: 100%; flex-direction: column; align-items: stretch; gap: 12px; padding-top: 10px; }
+.app-topbar.nav-folded .app-nav.open { display: flex; }
+.app-topbar.nav-folded .user-menu-panel { right: auto; left: 0; }
 @media (max-width: 860px) {
   .app-topbar .site-menu-button { display: grid; place-items: center; }
   .app-topbar .app-nav { display: none; width: 100%; flex-direction: column; align-items: stretch; gap: 12px; padding-top: 10px; }
