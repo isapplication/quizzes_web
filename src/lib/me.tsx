@@ -16,25 +16,28 @@ export interface SchoolBrand {
   backgroundUrl?: string | null;
 }
 
-export type Role = "STUDENT" | "PARENT" | "CONTENT_REVIEWER" | "TEACHER" | "SCHOOL_ADMIN";
+/** PLATFORM: a platform console session (no school, no other role). */
+export type Role = "STUDENT" | "PARENT" | "CONTENT_REVIEWER" | "TEACHER" | "SCHOOL_ADMIN" | "PLATFORM";
 
 export interface Me {
-  userId: string;
+  /** Null for a platform console session. */
+  userId: string | null;
   name: string;
   role: Role;
   roles: Role[];
   grade: number | null;
   classes: string[];
   locale: string;
+  /** The workspace; for a platform console session a stand-in with id null, kind PLATFORM and no brand. */
   school: {
-    id: string;
+    id: string | null;
     name: string;
     theme: Record<string, string>;
     status: string;
     code: string | null;
     /** SCHOOL, or INDEPENDENT: a teacher's personal workspace (no school page, no student accounts). */
-    kind: "SCHOOL" | "INDEPENDENT";
-    brand: SchoolBrand;
+    kind: "SCHOOL" | "INDEPENDENT" | "PLATFORM";
+    brand: SchoolBrand | null;
     /** How the school's people sign in: SCHOOL_PORTAL, EMAIL_CODE (staff), PASSWORD (students). */
     signInMethods: string[];
     /** The grades it teaches; empty for a personal workspace whose teacher hasn't picked them yet. */
@@ -43,7 +46,7 @@ export interface Me {
   /** For someone who came from their school's own system: where to go back to; otherwise null. */
   schoolSystemUrl: string | null;
   devTools: boolean;
-  /** Signed in through the platform team's two-step sign-in, and on the console's allowlist. */
+  /** Signed in to the platform console (an email on its allowlist, then the emailed code), and still on the list. */
   platformTeam: boolean;
   /** How this person signed in this time: SSO, PASSWORD, EMAIL_CODE, SIGN_UP, PLATFORM or SWITCH. */
   signedInWith: string;
@@ -51,6 +54,11 @@ export interface Me {
   account: { email: string; verified: boolean; workspaces: number } | null;
   /** The server sends emails. False: they are only stored (Communication), so screens never say "we emailed". */
   mailOn: boolean;
+}
+
+/** A platform console session: it belongs to no school and opens only the console. */
+export function isConsoleSession(me: Me): boolean {
+  return me.role === "PLATFORM";
 }
 
 export function isIndependent(me: Me): boolean {
@@ -153,12 +161,21 @@ export function MeProvider({ children }: { children: React.ReactNode }) {
     claim
       .then(() => api<Me>("/api/v1/me"))
       .then((m) => {
+        // A console session opens nothing but the console.
+        if (isConsoleSession(m) && !window.location.pathname.startsWith("/platform")) {
+          window.location.href = "/platform";
+          return;
+        }
         applyTheme(m.school.theme ?? {});
         applyIcon(m.school.brand?.iconUrl);
         setMe(m);
       })
       .catch((e: unknown) => {
         if (e instanceof ApiError && e.status === 401) {
+          if (window.location.pathname.startsWith("/platform")) {
+            window.location.href = "/platform/sign-in";
+            return;
+          }
           const next = window.location.pathname + window.location.search;
           window.location.href = "/sign-in?next=" + encodeURIComponent(next);
           return;

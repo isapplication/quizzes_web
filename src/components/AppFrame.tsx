@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { Started, startTab } from "@/lib/auth";
 import { BRAND } from "@/lib/brand";
-import { isIndependent, isSchoolAdmin, isStaff, Me, MeProvider, useMe } from "@/lib/me";
+import { isConsoleSession, isIndependent, isSchoolAdmin, isStaff, Me, MeProvider, useMe } from "@/lib/me";
 import { announceSignedOutEverywhere, clearTabKey, signInAsSomeoneElse } from "@/lib/tab";
 
 /** The frame of every signed-in page: the school's logo and name, the menu and sign-out; the school's terms below. */
@@ -24,12 +24,58 @@ export function AppFrame({ children, wide = false }: { children: React.ReactNode
 
 const ROLE_WORDS: Record<string, string> = {
   STUDENT: "Student", TEACHER: "Teacher", SCHOOL_ADMIN: "School admin", CONTENT_REVIEWER: "Content reviewer", PARENT: "Parent",
+  PLATFORM: "Platform team",
 };
 
 /** Fired when Communication's unread count may have changed (a message was read). */
 export const COMMUNICATION_CHANGED = "quizplayo:communication-changed";
 
 function TopBar() {
+  const me = useMe();
+  return isConsoleSession(me) ? <ConsoleTopBar /> : <SchoolTopBar />;
+}
+
+/**
+ * The top bar of a platform console session: no school, so only the console, help and signing out (the Quiz API
+ * refuses everything else for this session).
+ */
+function ConsoleTopBar() {
+  const me = useMe();
+  const [userMenu, setUserMenu] = useState(false);
+  return (
+    <header className="topbar app-topbar">
+      <Link href="/platform" className="brand"><span>{me.school.name}</span></Link>
+      <nav aria-label="Main" className="app-nav">
+        <Link href="/platform">Platform console</Link>
+        <div className="user-menu">
+          <button type="button" className="user-menu-button" aria-haspopup="menu" aria-expanded={userMenu}
+                  onClick={() => setUserMenu((u) => !u)}>
+            <span className="user-avatar" aria-hidden="true">{initials(me.name)}</span>
+            <span className="user-name">{me.name}</span>
+            <span aria-hidden="true">▾</span>
+          </button>
+          {userMenu && (
+            <div className="user-menu-panel" role="menu">
+              <div className="user-menu-who">
+                <strong>{me.name}</strong>
+                <span className="muted">{ROLE_WORDS.PLATFORM}</span>
+              </div>
+              <Link role="menuitem" href="/help" onClick={() => setUserMenu(false)}>Help</Link>
+              <hr className="user-menu-sep" />
+              <button role="menuitem" type="button" onClick={() => signOut(false)}>Sign out</button>
+              <button role="menuitem" type="button" onClick={() => signOut(true)}>
+                Sign out everywhere
+                <span className="user-menu-hint">Every person signed in on this browser.</span>
+              </button>
+            </div>
+          )}
+        </div>
+      </nav>
+    </header>
+  );
+}
+
+function SchoolTopBar() {
   const me = useMe();
   const staff = isStaff(me);
   const school = !isIndependent(me);
