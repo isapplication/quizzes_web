@@ -15,8 +15,11 @@ Clone `quizplayo-platform` next to this folder and start its services (VS Code "
 
 ```bash
 npm install
-ISQUIZ_API_URL=http://localhost:8090 npm run dev   # http://localhost:3030
+ISQUIZ_API_URL=http://localhost:8100 npm run dev   # http://localhost:7100
 ```
+
+The web app listens on 7100 (the Quiz API on 8100, the game server on 9100: the same on every machine).
+`PORT` picks another port, e.g. `PORT=7200 npm run start` for a second copy on a server.
 
 ## Checks
 

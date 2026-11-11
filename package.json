@@ -4,9 +4,9 @@
   "private": true,
   "description": "Quizplayo web app: teacher (bank, AI Studio, host screen) and student (join, play)",
   "scripts": {
-    "dev": "next dev -p 3030",
+    "dev": "next dev -p ${PORT:-7100}",
     "build": "next build",
-    "start": "next start -p 3030",
+    "start": "next start -p ${PORT:-7100}",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

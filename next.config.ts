@@ -5,8 +5,8 @@ import type { NextConfig } from "next";
 //   /api/v1/...      → Quiz API
 //   /live/{PIN}/...  → the game server that owns the PIN
 // In development the web app forwards the Quiz API paths, so the Quizplayo session cookie
-// is first-party on http://localhost:3030. Live games connect to the address the API returns.
-const api = process.env.ISQUIZ_API_URL ?? "http://localhost:8090";
+// is first-party on http://localhost:7100. Live games connect to the address the API returns.
+const api = process.env.ISQUIZ_API_URL ?? "http://localhost:8100";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
