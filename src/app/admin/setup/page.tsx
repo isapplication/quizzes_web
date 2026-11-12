@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AppFrame } from "@/components/AppFrame";
 import { api, ApiError } from "@/lib/api";
 import { isIndependent, isSchoolAdmin, useMe } from "@/lib/me";
+import { type AiSettings, providerModelText } from "@/lib/aiSettings";
 import { GRADES, gradeLabel, gradesText, schoolStatus } from "@/lib/school";
 import { PageHeader } from "@/components/ui/States";
 
@@ -49,6 +50,7 @@ function SchoolSetup() {
   const [details, setDetails] = useState({ schoolCode: "", countryCode: "", city: "" });
   const [grades, setGrades] = useState<number[]>([]);
   const [saved, setSaved] = useState<string | null>(null);
+  const [ai, setAi] = useState<AiSettings | null>(null);
 
   const show = useCallback((s: Setup) => {
     setSetup(s);
@@ -61,6 +63,8 @@ function SchoolSetup() {
     api<Setup>("/api/v1/admin/setup")
       .then(show)
       .catch((e: unknown) => setError(e instanceof ApiError ? e.message : "Quizplayo could not load your school's setup."));
+    // The optional AI step: done when the school has saved its AI provider's key. Not loading it only leaves the step open.
+    api<AiSettings>("/api/v1/admin/ai").then(setAi).catch(() => setAi(null));
   }, [me, show]);
 
   async function run(step: string, path: string, method: string, body?: unknown) {
@@ -262,6 +266,22 @@ function SchoolSetup() {
           </div>
         </li>
 
+        <li id="ai" className={"step" + (ai?.configured ? " done" : "")}>
+          <span className="step-number">5</span>
+          <div className="card stack">
+            <h2>Set up AI <span className="chip">Optional</span></h2>
+            <p>
+              {ai?.configured
+                ? <>AI Studio, re-teach and class summaries use your school&apos;s own AI provider:{" "}
+                  <strong>{providerModelText(ai.provider, ai.model)}</strong>.</>
+                : <>AI Studio, re-teach and class summaries use your school&apos;s own AI provider key (OpenAI, Anthropic
+                  Claude or another). Until you add one, AI is off for your teachers.</>}
+            </p>
+            <div>
+              <a className="btn btn-secondary" href="/admin/ai">{ai?.configured ? "AI settings" : "Set up AI"}</a>
+            </div>
+          </div>
+        </li>
       </ol>
     </div>
   );

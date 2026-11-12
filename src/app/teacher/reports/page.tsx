@@ -226,7 +226,7 @@ function HardQuestions({ rows, reteach, onError }: { rows: QuestionAccuracy[]; r
       <div className="row reteach-row">
         <ReteachButton path={reteach.reteach} hard={rows.length} onError={onError} describedBy={hint} />
         <AiReteachButton path={reteach.aiReteach} hard={rows.length} onError={onError} />
-        <span id={hint} className="muted">Copies {rows.length === 1 ? "this question" : "these " + rows.length + " questions"} into a new draft quiz, or AI drafts new ones like them for you to review in AI Studio (that counts towards your school&apos;s monthly AI limit).</span>
+        <span id={hint} className="muted">Copies {rows.length === 1 ? "this question" : "these " + rows.length + " questions"} into a new draft quiz, or AI drafts new ones like them for you to review in AI Studio (that uses your school&apos;s AI provider).</span>
       </div>
       <ol className="question-list">
         {rows.map((q) => <HardQuestion key={q.questionId} q={q} />)}

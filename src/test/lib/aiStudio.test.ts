@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  draftToEditor, estimateText, money, overAllowance, sourceProblem, startBody, startJson, type StartSettings, toPublish,
+  allowanceText, draftToEditor, estimateText, money, overAllowance, sourceProblem, startBody, startJson, type StartSettings, toPublish,
   WRITABLE,
 } from "../../lib/aiStudio";
 import { tryText } from "../../lib/assignments";
@@ -59,25 +59,34 @@ describe("startBody: JSON for text sources, an upload for files", () => {
   });
 });
 
-describe("the estimate and the school's monthly allowance", () => {
+describe("the estimate and the school's own monthly limit", () => {
   const allowance = { ceiling: 20, spent: 4.5, reserved: 0, remaining: 15.5 };
+  const noLimit = { ceiling: null, spent: 4.5, reserved: 0, remaining: null };
 
   it("says the cost and what is left", () => {
     expect(money(0.123)).toBe("$0.12");
     expect(money(0.001)).toBe("under $0.01");
     expect(estimateText({ mode: "LIVE", usd: 0.12, withClaudeUsd: 0.12, upTo: false, allowance }))
-      .toBe("This draft costs about $0.12. $15.50 of your school's $20.00 AI allowance is left this month.");
+      .toBe("This draft costs about $0.12 on your school's AI account (an estimate). Monthly limit $20.00, $15.50 left.");
     expect(estimateText({ mode: "LIVE", usd: 0.9, withClaudeUsd: 0.9, upTo: true, allowance })).toMatch(/^This draft costs up to \$0\.90/);
     expect(estimateText({ mode: "SAMPLE", usd: 0, withClaudeUsd: 0.12, upTo: false, allowance })).toMatch(/^Sample mode: this draft costs nothing/);
-    expect(estimateText({ mode: "LIVE", usd: 0, withClaudeUsd: 0, upTo: false, allowance: { ...allowance, ceiling: 0 } }))
-      .toMatch(/switched off/);
+    expect(estimateText({ mode: "SAMPLE", usd: 0, withClaudeUsd: 0.12, upTo: false, allowance })).not.toMatch(/Claude/);
   });
 
-  it("knows when the allowance can't take a draft", () => {
+  it("says when no monthly limit is set", () => {
+    expect(allowanceText(noLimit)).toBe("No monthly limit set");
+    expect(allowanceText(allowance)).toBe("Monthly limit $20.00, $15.50 left");
+    expect(allowanceText({ ceiling: 10, remaining: -2 })).toBe("Monthly limit $10.00, $0.00 left");
+    expect(estimateText({ mode: "LIVE", usd: 0.12, withClaudeUsd: 0.12, upTo: false, allowance: noLimit }))
+      .toMatch(/No monthly limit set\.$/);
+  });
+
+  it("knows when the limit can't take a draft, and never stops a school with no limit", () => {
     expect(overAllowance({ mode: "LIVE", usd: 0.2, withClaudeUsd: 0.2, upTo: false, allowance })).toBe(false);
     expect(overAllowance({ mode: "LIVE", usd: 16, withClaudeUsd: 16, upTo: false, allowance })).toBe(true);
     expect(overAllowance({ mode: "SAMPLE", usd: 0, withClaudeUsd: 1, upTo: false,
       allowance: { ...allowance, spent: 20, remaining: 0 } })).toBe(true);
+    expect(overAllowance({ mode: "LIVE", usd: 500, withClaudeUsd: 500, upTo: false, allowance: noLimit })).toBe(false);
   });
 });
 

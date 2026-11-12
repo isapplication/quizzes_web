@@ -3,15 +3,20 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { ClassSummaryView, summaryText, withQuery } from "@/lib/reports";
+import { aiEnabled } from "@/lib/aiSettings";
+import { AiOffNotice, useAiStatus } from "@/components/AiOffNotice";
 
 /**
  * "Write a summary" on a class report (wave3-plan.md, 3g, W52): AI writes about 150 words (what went well, what to
  * revisit, three next steps) from the class's totals and question texts only, never a student's name or answer. It is a
- * draft the teacher reads, copies or writes again; each one counts towards the school's monthly AI limit. The newest one
- * for the class and days comes back without another AI call.
+ * draft the teacher reads, copies or writes again; each one runs on the school's own AI key and counts towards its monthly
+ * limit, if it has one. The newest one for the class and days comes back without another AI call. While the school
+ * hasn't set up AI, "Write a summary" is off and the notice says why.
  */
 export function ClassSummary({ classCode, query }: { classCode: string; query: string }) {
   const id = useId();
+  const status = useAiStatus();
+  const off = !aiEnabled(status);
   const [summary, setSummary] = useState<ClassSummaryView | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -72,8 +77,9 @@ export function ClassSummary({ classCode, query }: { classCode: string; query: s
       </div>
       <p className="muted" id={id + "-note"}>
         AI writes it from the class&apos;s totals and question texts only, never a student&apos;s name or answer. Read it before you share it.
-        Each summary counts towards your school&apos;s monthly AI limit.
+        Each summary uses your school&apos;s AI provider and counts towards its monthly limit, if one is set.
       </p>
+      {off && status && <AiOffNotice status={status} />}
       {error && <div className="alert alert-danger" role="alert">{error}</div>}
       {busy && <p className="muted" role="status">Writing the summary…</p>}
       {summary && !busy && (
@@ -98,7 +104,7 @@ export function ClassSummary({ classCode, query }: { classCode: string; query: s
       )}
       <div className="row class-summary-actions">
         <button type="button" className={summary ? "btn btn-light" : "btn btn-primary"} onClick={write}
-                disabled={busy || !loaded} aria-describedby={id + "-note"}>
+                disabled={busy || !loaded || off} aria-describedby={id + "-note"}>
           {busy ? "Writing…" : summary ? "Write again" : "Write a summary"}
         </button>
         {summary && !busy && (

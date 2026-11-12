@@ -1,5 +1,5 @@
 /**
- * AI Studio (Wave 3: 3c every type, 3d sources and the monthly ceiling, 3f lessons and worked solutions): what a
+ * AI Studio (Wave 3: 3c every type, 3d sources and the monthly limit, 3f lessons and worked solutions): what a
  * teacher can draft from and its limits (the same as the API's, so the page can say so before sending), the request
  * the page sends, and the cost estimate in words.
  */
@@ -115,17 +115,21 @@ export function startBody(s: StartSettings, files: File[]): unknown {
   return form;
 }
 
-/** The school's AI allowance this month, in US dollars (W53). */
+/**
+ * The workspace's AI spending this month on its own AI key, in US dollars. {@code ceiling} and {@code remaining} are
+ * null when the school admin has set no monthly limit.
+ */
 export interface Allowance {
-  ceiling: number;
+  ceiling: number | null;
   spent: number;
   reserved: number;
-  remaining: number;
+  remaining: number | null;
 }
 
 export interface Estimate {
   mode: "LIVE" | "SAMPLE";
   usd: number;
+  /** What the draft would cost with a real AI provider (sample mode shows it). */
   withClaudeUsd: number;
   /** An upper bound: a PDF's pages or an article's length aren't known before it is read. */
   upTo: boolean;
@@ -138,21 +142,29 @@ export function money(usd: number): string {
   return "$" + usd.toFixed(2);
 }
 
-/** The estimate before "Draft", in words. */
-export function estimateText(e: Estimate): string {
-  if (e.allowance.ceiling <= 0) return "AI drafting is switched off for your school. Ask Quizplayo support.";
-  const left = "$" + e.allowance.remaining.toFixed(2) + " of your school's $" + e.allowance.ceiling.toFixed(2)
-    + " AI allowance is left this month.";
-  if (e.mode === "SAMPLE") {
-    return "Sample mode: this draft costs nothing (with Claude it would be " + (e.upTo ? "up to " : "about ")
-      + money(e.withClaudeUsd) + "). " + left;
-  }
-  return "This draft costs " + (e.upTo ? "up to " : "about ") + money(e.usd) + ". " + left;
+/** "No monthly limit set", or "Monthly limit $20.00, $15.50 left". */
+export function allowanceText(a: Pick<Allowance, "ceiling" | "remaining">): string {
+  if (a.ceiling === null || a.ceiling === undefined) return "No monthly limit set";
+  const left = Math.max(0, a.remaining ?? 0);
+  return "Monthly limit $" + Number(a.ceiling).toFixed(2) + ", $" + left.toFixed(2) + " left";
 }
 
-/** True when the allowance can't take this draft: the page says so, and the API would refuse it. */
+/** The estimate before "Draft", in words: an estimate of what your school's AI provider charges. */
+export function estimateText(e: Estimate): string {
+  const limit = allowanceText(e.allowance) + ".";
+  if (e.mode === "SAMPLE") {
+    return "Sample mode: this draft costs nothing (with an AI provider it would be " + (e.upTo ? "up to " : "about ")
+      + money(e.withClaudeUsd) + "). " + limit;
+  }
+  return "This draft costs " + (e.upTo ? "up to " : "about ") + money(e.usd) + " on your school's AI account (an estimate). "
+    + limit;
+}
+
+/** True when the monthly limit can't take this draft: the page says so, and the API would refuse it. No limit: never. */
 export function overAllowance(e: Estimate): boolean {
-  return e.allowance.ceiling <= 0 || e.allowance.remaining <= 0 || e.usd > e.allowance.remaining;
+  const { ceiling, remaining } = e.allowance;
+  if (ceiling === null || ceiling === undefined || remaining === null || remaining === undefined) return false;
+  return remaining <= 0 || e.usd > remaining;
 }
 
 /** A draft as the review edits it: the editor's own shape, with the draft's position to link it back (AI activity). */

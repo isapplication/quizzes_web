@@ -163,6 +163,7 @@ function SchoolTopBar() {
         {isSchoolAdmin(me) && school && <Link href="/admin/people">People</Link>}
         {isSchoolAdmin(me) && <Link href="/admin/reports">School reports</Link>}
         {isSchoolAdmin(me) && <Link href="/admin/ai-use">AI use</Link>}
+        {isSchoolAdmin(me) && <Link href="/admin/ai">AI settings</Link>}
         {isSchoolAdmin(me) && <Link href="/admin/brand">Brand settings</Link>}
         {me.platformTeam && <Link href="/platform">Platform console</Link>}
         <div className="user-menu" ref={box}>

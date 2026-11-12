@@ -11,15 +11,10 @@ import {
 } from "@/lib/aiStudio";
 import { gradeLabel } from "@/lib/content";
 import { useMe } from "@/lib/me";
+import { aiEnabled, aiName, type AiStatus, sourceAllowed, visibleSources } from "@/lib/aiSettings";
+import { AiOffNotice } from "@/components/AiOffNotice";
 import { PageHeader } from "@/components/ui/States";
 import { changeType, keyText, missing, QTYPE_HINT, QTYPE_LABEL, type QType, scored } from "@/lib/questionTypes";
-
-interface StudioStatus {
-  mode: "LIVE" | "SAMPLE";
-  model: string;
-  promptVersion: string;
-  notice: string | null;
-}
 
 interface Draft {
   position: number;
@@ -67,7 +62,7 @@ function Studio() {
   const params = useSearchParams();
   const me = useMe();
   const id = useId();
-  const [status, setStatus] = useState<StudioStatus | null>(null);
+  const [status, setStatus] = useState<AiStatus | null>(null);
   const [kind, setKind] = useState<DraftKind>("QUIZ");
   const [sourceKind, setSourceKind] = useState<SourceKind>("TOPIC");
   const [topic, setTopic] = useState("");
@@ -90,7 +85,7 @@ function Studio() {
   const seen = useRef<Set<number>>(new Set());
 
   useEffect(() => {
-    api<StudioStatus>("/api/v1/ai/status").then(setStatus).catch((e: Error) => setError(e.message));
+    api<AiStatus>("/api/v1/ai/status").then(setStatus).catch((e: Error) => setError(e.message));
   }, []);
 
   // A run started elsewhere ("Re-teach with AI" on a report) opens here for review: ?run=<id>.
@@ -104,8 +99,22 @@ function Studio() {
     setRunId(startedRun);
   }, [startedRun]);
 
-  // The cost before drafting (W53), from what the run will be; never the source itself.
+  // A source this workspace's AI can't read (photos without a vision model, PDFs) isn't offered.
   useEffect(() => {
+    if (status && !sourceAllowed(sourceKind, status)) {
+      setSourceKind("TOPIC");
+      setFiles([]);
+    }
+  }, [status, sourceKind]);
+
+  const off = !aiEnabled(status);
+
+  // The cost before drafting (W53), from what the run will be; never the source itself. Not asked while AI is off.
+  useEffect(() => {
+    if (off) {
+      setEstimate(null);
+      return;
+    }
     const timer = setTimeout(() => {
       api<Estimate>("/api/v1/ai/estimate", {
         method: "POST",
@@ -114,9 +123,9 @@ function Studio() {
       }).then(setEstimate).catch(() => setEstimate(null));
     }, 400);
     return () => clearTimeout(timer);
-  }, [count, subject, kind, sourceKind, text, files.length]);
+  }, [count, subject, kind, sourceKind, text, files.length, off]);
 
-  // Poll the run while Claude drafts and checks.
+  // Poll the run while the AI drafts and checks.
   useEffect(() => {
     if (!runId) return;
     let stop = false;
@@ -240,7 +249,8 @@ function Studio() {
         Draft a quiz or a lesson from a topic or your own material. Each question is checked for the Quizplayo question
         format, then answered again without the answer key; you only see drafts that passed, and you approve every one.
       </>} />
-      {status?.notice && <div className="alert alert-warning">{status.notice}</div>}
+      {status && off && <AiOffNotice status={status} id={id + "-off"} />}
+      {status?.notice && !off && <div className="alert alert-warning">{status.notice}</div>}
 
       <form className="card stack" onSubmit={start} noValidate>
         <fieldset className="studio-choice">
@@ -257,7 +267,7 @@ function Studio() {
 
         <fieldset className="studio-choice">
           <legend>Draft from</legend>
-          {SOURCES.map((s) => (
+          {visibleSources(SOURCES, status).map((s) => (
             <label key={s.kind} className="check">
               <input type="radio" name="source" value={s.kind} checked={sourceKind === s.kind}
                      aria-describedby={id + "-src-" + s.kind}
@@ -341,7 +351,7 @@ function Studio() {
             ))}
           </div>
           <p className="hint" id={id + "-types-hint"}>
-            {types.length === 0 ? "Pick at least one type." : "Claude mixes the types you pick. A poll has no right answer, "
+            {types.length === 0 ? "Pick at least one type." : aiName(status) + " mixes the types you pick. A poll has no right answer, "
               + "so it gets the format check only."}{kind === "LESSON" && " The lesson adds slides between the questions."}
           </p>
         </fieldset>
@@ -351,17 +361,22 @@ function Studio() {
         )}
         <div className="row">
           <span className="spacer" />
-          <button className="btn btn-primary" type="submit" disabled={busy} aria-describedby={id + "-types-hint"}>
+          <button className="btn btn-primary" type="submit" disabled={busy || off}
+                  aria-describedby={off ? id + "-off" : id + "-types-hint"}>
             {busy && !run ? "Starting…" : kind === "LESSON" ? `Draft a lesson of ${count}` : `Draft ${count} questions`}
           </button>
         </div>
-        {status && <p className="muted">Model: {status.model} · prompt {status.promptVersion}</p>}
+        {status && !off && status.model && (
+          <p className="muted">
+            {status.providerName ? status.providerName + " · " : ""}Model: {status.model} · prompt {status.promptVersion}
+          </p>
+        )}
       </form>
 
       {error && <div className="alert alert-danger" role="alert">{error}</div>}
       {working && (
         <div className="alert" role="status">
-          {run.status === "DRAFTING" ? "Claude is drafting…" : "Checking each draft: format, then answering it without the key…"}
+          {run.status === "DRAFTING" ? aiName(status) + " is drafting…" : "Checking each draft: format, then answering it without the key…"}
         </div>
       )}
       {run?.status === "FAILED" && <div className="alert alert-danger">{run.errorMessage}</div>}

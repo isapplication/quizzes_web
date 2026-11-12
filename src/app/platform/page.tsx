@@ -101,7 +101,7 @@ function PlatformConsole() {
       {tab === "library" && <LibraryConsole onError={setError} onNotice={setNotice} />}
       {tab === "ai" && (
         <>
-          <AiCeilings onError={setError} onNotice={setNotice} />
+          <AiCeilings onError={setError} />
           <AiConsole onError={setError} />
         </>
       )}
