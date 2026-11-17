@@ -5,6 +5,8 @@ import { useCallback, useEffect, useState } from "react";
 import { AiCeilings } from "@/components/AiCeilings";
 import { AiConsole } from "@/components/AiConsole";
 import { EmailConsole } from "@/components/EmailConsole";
+import { EmailTemplates } from "@/components/EmailTemplates";
+import { PlatformPeople } from "@/components/PlatformPeople";
 import { LibraryConsole } from "@/components/LibraryConsole";
 import { LocationSettings } from "@/components/LocationSettings";
 import { LtiApprovals } from "@/components/LtiApprovals";
@@ -35,10 +37,11 @@ interface SignUpDay {
   schools: number;
 }
 
-type Tab = "workspaces" | "sign-ups" | "lms" | "library" | "ai" | "emails" | "settings";
+type Tab = "workspaces" | "people" | "sign-ups" | "lms" | "library" | "ai" | "emails" | "settings";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "workspaces", label: "Schools and teachers" },
+  { id: "people", label: "People" },
   { id: "sign-ups", label: "Sign-ups" },
   { id: "lms", label: "LMS registrations" },
   { id: "library", label: "Library" },
@@ -63,13 +66,15 @@ function PlatformConsole() {
   const me = useMe();
   const [tab, setTab] = useState<Tab>("workspaces");
   const [plans, setPlans] = useState<string[]>([]);
+  const [mailOn, setMailOn] = useState(true);
+  const [emailView, setEmailView] = useState<"sent" | "templates">("sent");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (!me.platformTeam) return;
-    api<{ plans: string[] }>("/api/v1/platform/options")
-      .then((o) => setPlans(o.plans))
+    api<{ plans: string[]; mailOn?: boolean }>("/api/v1/platform/options")
+      .then((o) => { setPlans(o.plans); setMailOn(o.mailOn !== false); })
       .catch((e: unknown) => setError(message(e)));
   }, [me.platformTeam]);
 
@@ -84,7 +89,7 @@ function PlatformConsole() {
 
   return (
     <div className="stack">
-      <PageHeader title="Platform console" description="Everyone who signed up, sign-ups per day, schools' LMS registrations to approve, the shared library, and product settings." />
+      <PageHeader title="Platform console" description="Everyone who signed up, the people in every school, sign-ups per day, schools' LMS registrations to approve, the shared library, and product settings." />
       <div className="tabs" role="tablist">
         {TABS.map((t) => (
           <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} className={tab === t.id ? "active" : undefined}
@@ -93,9 +98,16 @@ function PlatformConsole() {
           </button>
         ))}
       </div>
+      {!mailOn && (
+        <div className="alert alert-warning">
+          Emails are switched off on this server: every email is stored, not sent. Read them, and copy their codes or
+          links, in the Emails tab.
+        </div>
+      )}
       {error && <div className="alert alert-danger" role="alert">{error}</div>}
       {notice && <div className="alert alert-success" role="status">{notice}</div>}
       {tab === "workspaces" && <Workspaces plans={plans} onError={setError} onNotice={setNotice} />}
+      {tab === "people" && <PlatformPeople onError={setError} onNotice={setNotice} />}
       {tab === "sign-ups" && <SignUps onError={setError} />}
       {tab === "lms" && <LtiApprovals onError={setError} onNotice={setNotice} />}
       {tab === "library" && <LibraryConsole onError={setError} onNotice={setNotice} />}
@@ -105,7 +117,19 @@ function PlatformConsole() {
           <AiConsole onError={setError} />
         </>
       )}
-      {tab === "emails" && <EmailConsole onError={setError} onNotice={setNotice} />}
+      {tab === "emails" && (
+        <>
+          <div className="segmented" role="tablist" aria-label="Emails" style={{ alignSelf: "start", gridTemplateColumns: "repeat(2, auto)" }}>
+            {([["sent", "Sent emails"], ["templates", "Templates"]] as const).map(([k, label]) => (
+              <button key={k} type="button" role="tab" aria-selected={emailView === k} className={emailView === k ? "on" : ""}
+                      onClick={() => { setEmailView(k); setNotice(null); setError(null); }}>{label}</button>
+            ))}
+          </div>
+          {emailView === "sent"
+            ? <EmailConsole onError={setError} onNotice={setNotice} />
+            : <EmailTemplates onError={setError} onNotice={setNotice} />}
+        </>
+      )}
       {tab === "settings" && <LocationSettings onError={setError} onNotice={setNotice} />}
     </div>
   );
