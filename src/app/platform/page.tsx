@@ -65,6 +65,17 @@ export default function PlatformPage() {
 function PlatformConsole() {
   const me = useMe();
   const [tab, setTab] = useState<Tab>("workspaces");
+
+  // The tab is in the address (?tab=people…), so a person's page in People can be opened from a bookmark.
+  useEffect(() => {
+    const open = () => {
+      const t = new URLSearchParams(window.location.search).get("tab");
+      setTab(TABS.some((x) => x.id === t) ? (t as Tab) : "workspaces");
+    };
+    open();
+    window.addEventListener("popstate", open);
+    return () => window.removeEventListener("popstate", open);
+  }, []);
   const [plans, setPlans] = useState<string[]>([]);
   const [mailOn, setMailOn] = useState(true);
   const [emailView, setEmailView] = useState<"sent" | "templates">("sent");
@@ -93,7 +104,12 @@ function PlatformConsole() {
       <div className="tabs" role="tablist">
         {TABS.map((t) => (
           <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} className={tab === t.id ? "active" : undefined}
-                  onClick={() => { setTab(t.id); setNotice(null); setError(null); }}>
+                  onClick={() => {
+                    setTab(t.id);
+                    setNotice(null);
+                    setError(null);
+                    window.history.pushState(null, "", window.location.pathname + "?tab=" + t.id);
+                  }}>
             {t.label}
           </button>
         ))}
