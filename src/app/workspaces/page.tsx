@@ -98,7 +98,7 @@ function Workspaces() {
                 <div>
                   <strong>{w.kind === "INDEPENDENT" ? "Personal: " + w.name : w.name}</strong>
                   <span className="muted"> · {w.kind === "INDEPENDENT" ? "Your own" : ROLE_WORDS[w.role] ?? w.role}
-                    {w.status === "ACTIVE" ? "" : w.status === "DISABLED" ? " · switched off" : " · paused"}</span>
+                    {w.status === "ACTIVE" ? "" : w.status === "DISABLED" ? " · switched off" : w.status === "ARCHIVED" ? " · archived" : " · paused"}</span>
                   {w.current && <span className="chip chip-ok" style={{ marginLeft: 8 }}>This tab</span>}
                 </div>
                 <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>

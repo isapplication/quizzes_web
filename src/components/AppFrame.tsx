@@ -257,7 +257,7 @@ function Workspaces({ onDone }: { onDone: () => void }) {
                 className={w.current ? "current" : ""} onClick={() => open(w)}>
           <span>{w.current ? "✓ " : ""}{w.kind === "INDEPENDENT" ? "Personal: " + w.name : w.name}</span>
           <span className="user-menu-hint">
-            {w.kind === "INDEPENDENT" ? "Your own" : ROLE_WORDS[w.role] ?? w.role}{w.status === "ACTIVE" ? "" : w.status === "DISABLED" ? " · switched off" : " · paused"}
+            {w.kind === "INDEPENDENT" ? "Your own" : ROLE_WORDS[w.role] ?? w.role}{w.status === "ACTIVE" ? "" : w.status === "DISABLED" ? " · switched off" : w.status === "ARCHIVED" ? " · archived" : " · paused"}
           </span>
         </button>
       ))}
