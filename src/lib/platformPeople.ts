@@ -37,6 +37,20 @@ export interface PersonChange {
   after: Record<string, unknown> | null;
 }
 
+/** What waits for an account: an open invitation to its email, or its pending join request. */
+export interface PendingItem {
+  kind: "INVITATION" | "JOIN_REQUEST";
+  id: string;
+  tenantId: string;
+  userId: string | null;
+  workspaceName: string;
+  role: string | null;
+  message: string | null;
+  createdAt: string;
+  expiresAt: string | null;
+  expired: boolean | null;
+}
+
 export interface Person {
   accountId: string;
   email: string;
@@ -49,12 +63,98 @@ export interface Person {
   archivedAt: string | null;
   onPlatformList: boolean;
   workspaces: PersonWorkspace[];
+  pending: PendingItem[];
   changes: PersonChange[];
 }
 
 export interface Done {
   message: string;
   person: Person;
+}
+
+/** Someone found inside one workspace (students only here); email only for staff. */
+export interface FoundMember {
+  userId: string;
+  name: string;
+  role: string;
+  status: string;
+  username: string | null;
+  email: string | null;
+  grade: number | null;
+  hasAccount: boolean;
+}
+
+export interface MemberClass {
+  id: string;
+  code: string;
+  name: string;
+  synced: boolean;
+}
+
+export interface ClassOption extends MemberClass {
+  grade: number | null;
+}
+
+export interface OpenInvitation {
+  id: string;
+  email: string;
+  role: string;
+  sentAt: string;
+  expiresAt: string;
+  expired: boolean;
+}
+
+/** One person in one workspace (PlatformMembers.Member). */
+export interface Member {
+  tenantId: string;
+  userId: string;
+  workspaceName: string;
+  kind: "SCHOOL" | "INDEPENDENT";
+  workspaceStatus: string;
+  name: string;
+  role: string;
+  status: string;
+  username: string | null;
+  email: string | null;
+  grade: number | null;
+  accountId: string | null;
+  linked: boolean;
+  source: string;
+  firstSeenAt: string;
+  lastSignInAt: string | null;
+  archivedAt: string | null;
+  /** Why they can't stop being an active admin here: LAST_ADMIN or OWNER. */
+  guard: "LAST_ADMIN" | "OWNER" | null;
+  classes: MemberClass[];
+  invitation: OpenInvitation | null;
+  changes: PersonChange[];
+}
+
+export interface MemberDone {
+  message: string;
+  member: Member;
+  /** Only right after an invitation was sent. */
+  link: string | null;
+}
+
+export const STAFF_ROLES = ["TEACHER", "CONTENT_REVIEWER", "SCHOOL_ADMIN"] as const;
+
+/** Why the platform team can't take this admin out of their workspace, in plain words. */
+export function guardText(guard: Member["guard"]): string | null {
+  if (guard === "LAST_ADMIN") return "The only active school admin here: they can't be switched off, archived, made a teacher or removed until someone else is a school admin.";
+  if (guard === "OWNER") return "Their own workspace: they stay its admin. To stop them, switch off or archive their account.";
+  return null;
+}
+
+/** What a username may be (PlatformMembers.username): the Quiz API checks the same. */
+export function usernameProblem(raw: string): string | null {
+  return /^[a-z0-9][a-z0-9._-]{2,39}$/.test(raw.trim().toLowerCase())
+    ? null
+    : "A username needs 3 to 40 lower-case letters, digits, dots, hyphens or underscores, starting with a letter or digit.";
+}
+
+export function gradeLabel(grade: number | null): string {
+  return grade == null ? "—" : grade === 0 ? "Kindergarten" : "Grade " + grade;
 }
 
 /** Why a change is made (PlatformPeople.REASON_CATEGORIES), in the order the dialog lists them. */
@@ -117,6 +217,13 @@ const ACTIONS: Record<string, string> = {
   PERSON_ARCHIVED: "Archived",
   PERSON_RESTORED: "Restored",
   PERSON_SIGNED_OUT: "Signed out everywhere",
+  PERSON_MEMBER_CHANGED: "Changed in a workspace",
+  PERSON_CLASSES_CHANGED: "Classes changed",
+  PERSON_UNLINKED: "Removed from a workspace",
+  INVITATION_SENT: "Invitation sent",
+  INVITATION_EMAIL_CHANGED: "Invitation email corrected",
+  INVITATION_WITHDRAWN: "Invitation withdrawn",
+  JOIN_REQUEST_DECLINED: "Join request declined",
 };
 
 export function actionLabel(action: string): string {
@@ -133,11 +240,22 @@ const FIELDS: Record<string, string> = {
   name: "Name",
   status: "Status",
   hasPassword: "Password",
+  role: "Role",
+  username: "Username",
+  grade: "Grade",
+  classesAdded: "Classes added",
+  classesRemoved: "Classes removed",
+  linked: "Account in this workspace",
+  invitation: "Invitation",
+  joinRequest: "Join request",
 };
 
 function show(field: string, value: unknown): string {
   if (field === "status" && typeof value === "string") return accountStatus(value).label;
   if (field === "hasPassword") return value ? "Set" : "None";
+  if (field === "role" && typeof value === "string") return roleLabel(value);
+  if (field === "grade") return gradeLabel(typeof value === "number" ? value : null);
+  if (Array.isArray(value)) return value.length ? value.join(", ") : "—";
   if (typeof value === "boolean") return value ? "Yes" : "No";
   return value === null || value === undefined ? "—" : String(value);
 }
@@ -145,5 +263,12 @@ function show(field: string, value: unknown): string {
 /** "Name: Sam → Sam R." lines for one change, every field in before or after. */
 export function changeLines(before: Record<string, unknown> | null, after: Record<string, unknown> | null): string[] {
   const fields = Array.from(new Set([...Object.keys(before ?? {}), ...Object.keys(after ?? {})]));
-  return fields.map((f) => `${FIELDS[f] ?? f}: ${show(f, before?.[f])} → ${show(f, after?.[f])}`);
+  return fields.flatMap((f) => {
+    // Class changes are lists of what was added or removed, not a before and after.
+    if (f === "classesAdded" || f === "classesRemoved") {
+      const list = (after?.[f] ?? before?.[f]) as unknown;
+      return Array.isArray(list) && list.length ? [`${FIELDS[f]}: ${list.join(", ")}`] : [];
+    }
+    return [`${FIELDS[f] ?? f}: ${show(f, before?.[f])} → ${show(f, after?.[f])}`];
+  });
 }

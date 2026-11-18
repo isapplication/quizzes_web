@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  accountStatus, actionLabel, changeLines, newEmailProblem, reasonCategoryLabel, reasonProblem, roleLabel,
+  accountStatus, actionLabel, changeLines, gradeLabel, guardText, newEmailProblem, reasonCategoryLabel, reasonProblem,
+  roleLabel, usernameProblem,
 } from "../../lib/platformPeople";
 
 describe("People: why a change is made", () => {
@@ -42,5 +43,35 @@ describe("People: words, never only colours", () => {
     expect(changeLines({ status: "ACTIVE" }, { status: "ARCHIVED" })).toEqual(["Status: Active → Archived"]);
     expect(changeLines({ hasPassword: true }, { hasPassword: false })).toEqual(["Password: Set → None"]);
     expect(changeLines(null, null)).toEqual([]);
+  });
+});
+
+describe("People in one workspace (step 2)", () => {
+  it("checks a student's username as the Quiz API does", () => {
+    expect(usernameProblem("Lena.K")).toBeNull();
+    expect(usernameProblem("le")).toContain("3 to 40");
+    expect(usernameProblem(".lena")).toContain("starting with");
+    expect(usernameProblem("lena k")).not.toBeNull();
+  });
+
+  it("names grades, with kindergarten as 0", () => {
+    expect(gradeLabel(0)).toBe("Kindergarten");
+    expect(gradeLabel(7)).toBe("Grade 7");
+    expect(gradeLabel(null)).toBe("—");
+  });
+
+  it("says why an admin can't be taken out", () => {
+    expect(guardText("LAST_ADMIN")).toContain("only active school admin");
+    expect(guardText("OWNER")).toContain("own workspace");
+    expect(guardText(null)).toBeNull();
+  });
+
+  it("writes role, grade, class and invitation changes in plain words", () => {
+    expect(changeLines({ role: "SCHOOL_ADMIN" }, { role: "TEACHER" })).toEqual(["Role: School admin → Teacher"]);
+    expect(changeLines({ grade: 0 }, { grade: 8 })).toEqual(["Grade: Kindergarten → Grade 8"]);
+    expect(changeLines({ classesRemoved: ["7A"] }, { classesAdded: [] }))
+      .toEqual(["Classes removed: 7A"]);
+    expect(actionLabel("INVITATION_EMAIL_CHANGED")).toBe("Invitation email corrected");
+    expect(actionLabel("JOIN_REQUEST_DECLINED")).toBe("Join request declined");
   });
 });

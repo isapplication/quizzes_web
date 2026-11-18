@@ -101,6 +101,7 @@ export const KIND_LABEL: Record<string, string> = {
   JOIN_APPROVED: "You're in",
   EMAIL_CHANGED_OLD: "Sign-in email changed (old address)",
   EMAIL_CHANGED_NEW: "Sign-in email changed (new address)",
+  STUDENT_INVITE: "Student invite link",
 };
 
 /** What a status means, in words: never only a colour. */

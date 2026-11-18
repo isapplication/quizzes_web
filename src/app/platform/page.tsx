@@ -144,7 +144,7 @@ function message(e: unknown): string {
   return e instanceof ApiError ? e.message : "That did not work. Please try again.";
 }
 
-type Pending = { id: string; action: "suspend" | "close" } | null;
+type Pending = { id: string; action: "suspend" | "close" | "restore" } | null;
 
 function Workspaces({ plans, onError, onNotice }: { plans: string[] } & Feedback) {
   const [kind, setKind] = useState<"" | "SCHOOL" | "INDEPENDENT">("");
@@ -234,11 +234,14 @@ function Workspaces({ plans, onError, onNotice }: { plans: string[] } & Feedback
                           <textarea rows={2} value={reason} placeholder="Why? Kept in the audit log (10 characters or more)."
                                     aria-label="Reason" onChange={(e) => setReason(e.target.value)} />
                           <div className="row">
-                            <button className="btn btn-danger" type="button" disabled={reason.trim().length < 10}
+                            <button className={open.action === "restore" ? "btn btn-primary" : "btn btn-danger"} type="button"
+                                    disabled={reason.trim().length < 10}
                                     onClick={() => act(`/api/v1/platform/workspaces/${w.id}/${open.action}`, "POST", { text: reason },
                                       open.action === "suspend" ? `${w.name} is suspended. Everyone there is signed out.`
-                                        : `${w.name} is closed for good.`)}>
-                              {open.action === "suspend" ? "Suspend now" : "Close for good"}
+                                        : open.action === "restore"
+                                          ? `${w.name} is restored as Suspended: nobody can sign in until you press Resume.`
+                                          : `${w.name} is closed. You can restore it later.`)}>
+                              {open.action === "suspend" ? "Suspend now" : open.action === "restore" ? "Restore as suspended" : "Close"}
                             </button>
                             <button className="btn btn-light" type="button" onClick={() => setPending(null)}>Cancel</button>
                           </div>
@@ -259,6 +262,11 @@ function Workspaces({ plans, onError, onNotice }: { plans: string[] } & Feedback
                           {w.status !== "CLOSED" && (
                             <button className="btn btn-light" type="button" onClick={() => { setPending({ id: w.id, action: "close" }); setReason(""); }}>
                               Close…
+                            </button>
+                          )}
+                          {w.status === "CLOSED" && (
+                            <button className="btn btn-light" type="button" onClick={() => { setPending({ id: w.id, action: "restore" }); setReason(""); }}>
+                              Restore…
                             </button>
                           )}
                         </div>
