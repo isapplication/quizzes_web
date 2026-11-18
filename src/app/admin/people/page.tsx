@@ -199,7 +199,7 @@ function People() {
         </select>
       </section>
 
-      <OneRosterImport onApplied={() => setChanged((n) => n + 1)} />
+      <OneRosterImport defaultAccess={access} onApplied={(newLogins) => { setChanged((n) => n + 1); if (newLogins.length) setLogins(newLogins); }} />
 
       <JoinRequests changed={changed} onDecided={() => setChanged((n) => n + 1)} />
       <Invitations changed={changed} onChanged={() => setChanged((n) => n + 1)} />
@@ -503,6 +503,10 @@ interface RosterApplied {
   classesAdded: number;
   classesChanged: number;
   memberships: number;
+  /** New students with a username: an invite link or a first password each, shown once. */
+  logins: { userId: string; name: string; username: string; firstPassword: string | null; inviteLink: string | null }[];
+  /** New students without a usable username: they need one before a link or password. */
+  noUsername: number;
 }
 
 const MAX_ZIP_BYTES = 20 * 1024 * 1024;
@@ -516,7 +520,9 @@ function plural(n: number, one: string, many: string): string {
  * problem, nothing changed), then "Apply". The zip goes to the API as it is, not as a form upload. A preview lasts
  * 30 minutes. If applying would switch off many people, the API stops and says why; the admin may apply anyway.
  */
-function OneRosterImport({ onApplied }: { onApplied: () => void }) {
+function OneRosterImport({ onApplied, defaultAccess }: { onApplied: (logins: Login[]) => void; defaultAccess: Access }) {
+  const [access, setAccess] = useState<Access>(defaultAccess);
+  useEffect(() => setAccess(defaultAccess), [defaultAccess]);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<RosterPreview | null>(null);
   const [applied, setApplied] = useState<RosterApplied | null>(null);
@@ -567,11 +573,12 @@ function OneRosterImport({ onApplied }: { onApplied: () => void }) {
     setNeedsConfirm(false);
     try {
       const r = await api<RosterApplied>(
-        `/api/v1/admin/people/oneroster/${encodeURIComponent(preview.previewId)}/apply?confirm=${confirm}`, { method: "POST" });
+        `/api/v1/admin/people/oneroster/${encodeURIComponent(preview.previewId)}/apply?confirm=${confirm}&access=${access}`,
+        { method: "POST" });
       setApplied(r);
       setPreview(null);
       setFile(null);
-      onApplied();
+      onApplied(r.logins.map((l) => ({ userId: l.userId, name: l.name, username: l.username, password: l.firstPassword, link: l.inviteLink })));
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Quizplayo could not apply this import.");
       setNeedsConfirm(e instanceof ApiError && e.code === "oneroster_needs_confirm");
@@ -613,6 +620,11 @@ function OneRosterImport({ onApplied }: { onApplied: () => void }) {
           Imported: {plural(applied.added, "person", "people")} added, {applied.changed} changed, {applied.switchedOff} switched off;{" "}
           {plural(applied.classesAdded, "class", "classes")} added, {applied.classesChanged} changed;{" "}
           {plural(applied.memberships, "class place", "class places")}.
+          {applied.noUsername > 0 && (
+            <> {plural(applied.noUsername, "new student has", "new students have")} no username Quizplayo can use in the
+              file, so no link or password was made. Add their usernames to the export and import it again, then choose New
+              invite link for each.</>
+          )}
         </div>
       )}
 
@@ -645,6 +657,7 @@ function OneRosterImport({ onApplied }: { onApplied: () => void }) {
             </div>
           )}
           <p className="hint" style={{ margin: 0 }}>This preview lasts 30 minutes. After that, check the file again.</p>
+          {p.people.add > 0 && <AccessChoice id="oneroster-access" value={access} onChange={setAccess} />}
         </div>
       )}
 

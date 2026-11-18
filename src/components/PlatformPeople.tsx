@@ -5,7 +5,7 @@ import { api, ApiError } from "@/lib/api";
 import { schoolStatus } from "@/lib/school";
 import {
   accountStatus, actionLabel, changeLines, gradeLabel, guardText, newEmailProblem, reasonCategoryLabel, reasonProblem,
-  roleLabel, usernameProblem, REASON_CATEGORIES, REASON_MAX, STAFF_ROLES,
+  peoplePlace, peopleSearch, roleLabel, usernameProblem, REASON_CATEGORIES, REASON_MAX, STAFF_ROLES,
   type ClassOption, type Done, type FoundMember, type FoundPerson, type Member, type MemberDone, type Person,
   type PersonChange,
 } from "@/lib/platformPeople";
@@ -41,7 +41,24 @@ type View =
  */
 export function PlatformPeople({ onError, onNotice }: Feedback) {
   const [view, setView] = useState<View>({ kind: "search" });
-  const go = useCallback((v: View) => { onError(null); onNotice(null); setView(v); }, [onError, onNotice]);
+  const go = useCallback((v: View) => {
+    onError(null);
+    onNotice(null);
+    setView(v);
+    // Each page has its own address (ids only), so Back works and a person's page can be bookmarked.
+    const search = peopleSearch(v);
+    if (window.location.search !== search) window.history.pushState(null, "", window.location.pathname + search);
+  }, [onError, onNotice]);
+
+  useEffect(() => {
+    const open = () => {
+      const place = peoplePlace(window.location.search);
+      setView(place.kind === "member" ? { ...place, from: { kind: "search" } } : place);
+    };
+    open();
+    window.addEventListener("popstate", open);
+    return () => window.removeEventListener("popstate", open);
+  }, []);
 
   if (view.kind === "account") {
     return <AccountView accountId={view.accountId} onBack={() => go({ kind: "search" })}

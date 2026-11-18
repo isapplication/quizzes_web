@@ -272,3 +272,32 @@ export function changeLines(before: Record<string, unknown> | null, after: Recor
     return [`${FIELDS[f] ?? f}: ${show(f, before?.[f])} → ${show(f, after?.[f])}`];
   });
 }
+
+/** Where the People tab is: the search, one account, or one person in one workspace. */
+export type PeoplePlace =
+  | { kind: "search" }
+  | { kind: "account"; accountId: string }
+  | { kind: "member"; tenantId: string; userId: string };
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The page's own address, so a person's page can be bookmarked and shared inside the team: only ids, never a name or
+ * an email (addresses end up in browser history and server logs).
+ */
+export function peopleSearch(place: PeoplePlace): string {
+  if (place.kind === "account") return `?tab=people&account=${place.accountId}`;
+  if (place.kind === "member") return `?tab=people&workspace=${place.tenantId}&person=${place.userId}`;
+  return "?tab=people";
+}
+
+/** The place an address names; anything else, or an id that isn't one, is the search. */
+export function peoplePlace(search: string): PeoplePlace {
+  const q = new URLSearchParams(search);
+  const account = q.get("account");
+  const tenantId = q.get("workspace");
+  const userId = q.get("person");
+  if (account && UUID.test(account)) return { kind: "account", accountId: account };
+  if (tenantId && userId && UUID.test(tenantId) && UUID.test(userId)) return { kind: "member", tenantId, userId };
+  return { kind: "search" };
+}
