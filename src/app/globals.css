@@ -1136,3 +1136,9 @@ input[type=email], input[type=tel], input[type=password], input[type=search] {
   .ai-details { grid-template-columns: minmax(0, 1fr); gap: 0; }
   .ai-details dd { margin-bottom: 8px; overflow-wrap: anywhere; }
 }
+
+/* Platform console → Emails → Templates */
+.template-meta { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 12px; margin: 0; font-size: 14px; }
+.template-meta dt { color: var(--muted); }
+.template-meta dd { margin: 0; }
+.template-body { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; padding: 12px; background: var(--page); border: 1px solid var(--border); border-radius: 8px; font-size: 14px; max-block-size: 360px; overflow: auto; }

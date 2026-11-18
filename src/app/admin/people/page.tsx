@@ -5,6 +5,7 @@ import { AppFrame } from "@/components/AppFrame";
 import { api, ApiError } from "@/lib/api";
 import { isSchoolAdmin, useMe } from "@/lib/me";
 import { EmptyState, LoadingState, PageHeader } from "@/components/ui/States";
+import { LinkQr } from "@/components/LinkQr";
 
 type Role = "STUDENT" | "TEACHER" | "SCHOOL_ADMIN";
 
@@ -16,7 +17,7 @@ interface Person {
   username: string | null;
   grade: number | null;
   classes: string[];
-  status: "ACTIVE" | "DISABLED";
+  status: "ACTIVE" | "DISABLED" | "ARCHIVED";
   source: string;
   lastSignInAt: string | null;
   /** Staff: LINKED (joined with their Quizplayo account), INVITED (not accepted yet) or null. */
@@ -49,6 +50,7 @@ interface ImportRow {
   login: string;
   problem: string | null;
   firstPassword: string | null;
+  inviteLink: string | null;
 }
 
 interface ImportResult {
@@ -58,10 +60,27 @@ interface ImportResult {
   rows: ImportRow[];
 }
 
+/** A student's way in, shown once: a first password, or an invite link to choose their own (D27). */
 interface Login {
   name: string;
   username: string;
-  password: string;
+  password?: string | null;
+  link?: string | null;
+}
+
+type Access = "INVITE_LINK" | "FIRST_PASSWORD";
+
+/** Per add or import, how new students get in; starts on the school's default. */
+function AccessChoice({ value, onChange, id }: { value: Access; onChange: (v: Access) => void; id: string }) {
+  return (
+    <div className="field">
+      <label htmlFor={id}>New students get</label>
+      <select id={id} value={value} onChange={(e) => onChange(e.target.value as Access)}>
+        <option value="INVITE_LINK">An invite link to choose their own password</option>
+        <option value="FIRST_PASSWORD">A first password you give them</option>
+      </select>
+    </div>
+  );
 }
 
 const ROLE_WORDS: Record<Role, string> = { STUDENT: "Student", TEACHER: "Teacher", SCHOOL_ADMIN: "School admin" };
@@ -84,6 +103,8 @@ function People() {
   const [people, setPeople] = useState<Person[] | null>(null);
   const [filter, setFilter] = useState<"" | Role>("");
   const [query, setQuery] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
+  const [access, setAccess] = useState<Access>("INVITE_LINK");
   const [error, setError] = useState<string | null>(null);
   const [logins, setLogins] = useState<Login[]>([]);
   const [changed, setChanged] = useState(0);
@@ -92,15 +113,29 @@ function People() {
     const params = new URLSearchParams();
     if (filter) params.set("role", filter);
     if (query.trim()) params.set("q", query.trim());
+    if (showArchived) params.set("archived", "true");
     api<Person[]>("/api/v1/admin/people?" + params.toString())
       .then(setPeople)
       .catch((e: unknown) => setError(e instanceof ApiError ? e.message : "Quizplayo could not load your people."));
-  }, [filter, query, changed]);
+  }, [filter, query, showArchived, changed]);
 
   useEffect(() => {
     const t = setTimeout(load, 250);
     return () => clearTimeout(t);
   }, [load]);
+
+  useEffect(() => {
+    api<{ access: Access }>("/api/v1/admin/people/access-default").then((r) => setAccess(r.access)).catch(() => undefined);
+  }, []);
+
+  async function saveDefault(next: Access) {
+    setError(null);
+    try {
+      setAccess((await api<{ access: Access }>("/api/v1/admin/people/access-default", { method: "PUT", body: { access: next } })).access);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Quizplayo could not save that setting.");
+    }
+  }
 
   if (!isSchoolAdmin(me)) {
     return <div className="alert alert-danger">People is for your school&apos;s Quizplayo admins.</div>;
@@ -118,12 +153,21 @@ function People() {
     }
   }
 
-  async function reset(p: Person) {
-    if (!window.confirm(`Give ${p.name} a new first password? Their current password stops working.`)) return;
+  async function archive(p: Person) {
+    if (!window.confirm(`Archive ${p.name}? They are signed out and can't sign in, and they leave your lists. `
+      + "Nothing of theirs is deleted: you can restore them under Show archived.")) return;
+    await change(p, { status: "ARCHIVED" });
+  }
+
+  async function reset(p: Person, how: Access) {
+    if (!window.confirm(how === "INVITE_LINK"
+      ? `Make a new invite link for ${p.name}? Any earlier link stops working; their password stays until they use the new link.`
+      : `Give ${p.name} a new first password? Their current password stops working.`)) return;
     setError(null);
     try {
-      const r = await api<{ firstPassword: string }>(`/api/v1/admin/people/${p.userId}/reset-password`, { method: "POST" });
-      setLogins([{ name: p.name, username: p.username ?? "", password: r.firstPassword }]);
+      const r = await api<{ firstPassword?: string; inviteLink?: string }>(`/api/v1/admin/people/${p.userId}/access`,
+        { method: "POST", body: { access: how } });
+      setLogins([{ name: p.name, username: p.username ?? "", password: r.firstPassword ?? null, link: r.inviteLink ?? null }]);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Quizplayo could not reset the password.");
     }
@@ -138,9 +182,20 @@ function People() {
       {logins.length > 0 && <LoginCards logins={logins} schoolLink={schoolLink} onClose={() => setLogins([])} />}
 
       <div className="people-grid">
-        <AddPerson onAdded={(login) => { setChanged((n) => n + 1); if (login) setLogins([login]); }} />
-        <ImportCsv onSaved={(newLogins) => { setChanged((n) => n + 1); if (newLogins.length) setLogins(newLogins); }} />
+        <AddPerson defaultAccess={access} onAdded={(login) => { setChanged((n) => n + 1); if (login) setLogins([login]); }} />
+        <ImportCsv defaultAccess={access} onSaved={(newLogins) => { setChanged((n) => n + 1); if (newLogins.length) setLogins(newLogins); }} />
       </div>
+
+      <section className="card row" aria-labelledby="access-title" style={{ flexWrap: "wrap", gap: 12, justifyContent: "space-between" }}>
+        <div style={{ minWidth: 0, flex: "1 1 260px" }}>
+          <h2 id="access-title" style={{ margin: 0, fontSize: 18 }}>How new students get in</h2>
+          <p className="hint" style={{ margin: 0 }}>The choice adding or importing students starts on. An invite link lets each student choose their own password, so nobody else knows it.</p>
+        </div>
+        <select aria-label="How new students get in" value={access} onChange={(e) => saveDefault(e.target.value as Access)}>
+          <option value="INVITE_LINK">Invite links (recommended)</option>
+          <option value="FIRST_PASSWORD">First passwords</option>
+        </select>
+      </section>
 
       <OneRosterImport onApplied={() => setChanged((n) => n + 1)} />
 
@@ -159,6 +214,10 @@ function People() {
             </select>
             <input type="search" aria-label="Search people" placeholder="Search name, email or username"
                    value={query} onChange={(e) => setQuery(e.target.value)} />
+            <label className="row" style={{ gap: 6 }}>
+              <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
+              Show archived
+            </label>
           </div>
         </div>
         {!people && <LoadingState rows={4} label="Loading people" />}
@@ -177,7 +236,7 @@ function People() {
               </thead>
               <tbody>
                 {people.map((p) => (
-                  <tr key={p.userId} className={p.status === "DISABLED" ? "muted-row" : undefined}>
+                  <tr key={p.userId} className={p.status !== "ACTIVE" ? "muted-row" : undefined}>
                     <td><strong>{p.name}</strong>{p.grade != null && <span className="muted"> · Grade {p.grade === 0 ? "K" : p.grade}</span>}</td>
                     <td>{ROLE_WORDS[p.role] ?? p.role}</td>
                     <td>
@@ -188,18 +247,34 @@ function People() {
                     <td>{p.lastSignInAt ? new Date(p.lastSignInAt).toLocaleDateString() : <span className="muted">Never</span>}</td>
                     <td>
                       <span className={"chip" + (p.status === "ACTIVE" ? " chip-ok" : "")}>
-                        {p.status === "ACTIVE" ? "Active" : "Switched off"}
+                        {p.status === "ACTIVE" ? "Active" : p.status === "ARCHIVED" ? "Archived" : "Switched off"}
                       </span>
                     </td>
                     <td className="row" style={{ justifyContent: "flex-end", flexWrap: "wrap" }}>
-                      {p.role === "STUDENT" && p.username && (
-                        <button type="button" className="btn btn-light" onClick={() => reset(p)}>Reset password</button>
-                      )}
-                      {p.userId !== me.userId && (
-                        <button type="button" className="btn btn-light"
-                                onClick={() => change(p, { status: p.status === "ACTIVE" ? "DISABLED" : "ACTIVE" })}>
-                          {p.status === "ACTIVE" ? "Switch off" : "Switch on"}
+                      {p.status === "ARCHIVED" ? (
+                        <button type="button" className="btn btn-light" onClick={() => change(p, { status: "ACTIVE" })}>
+                          Restore<span className="sr-only"> {p.name}</span>
                         </button>
+                      ) : (
+                        <>
+                          {p.role === "STUDENT" && p.username && (
+                            <>
+                              <button type="button" className="btn btn-light" onClick={() => reset(p, "INVITE_LINK")}>New invite link</button>
+                              <button type="button" className="btn btn-light" onClick={() => reset(p, "FIRST_PASSWORD")}>New first password</button>
+                            </>
+                          )}
+                          {p.userId !== me.userId && (
+                            <button type="button" className="btn btn-light"
+                                    onClick={() => change(p, { status: p.status === "ACTIVE" ? "DISABLED" : "ACTIVE" })}>
+                              {p.status === "ACTIVE" ? "Switch off" : "Switch on"}
+                            </button>
+                          )}
+                          {p.userId !== me.userId && (
+                            <button type="button" className="btn btn-light" onClick={() => archive(p)}>
+                              Archive<span className="sr-only"> {p.name}</span>
+                            </button>
+                          )}
+                        </>
                       )}
                     </td>
                   </tr>
@@ -214,7 +289,9 @@ function People() {
 }
 
 /** One person by hand. A student's first password comes back once, to print or read out. */
-function AddPerson({ onAdded }: { onAdded: (login: Login | null) => void }) {
+function AddPerson({ onAdded, defaultAccess }: { onAdded: (login: Login | null) => void; defaultAccess: Access }) {
+  const [access, setAccess] = useState<Access>(defaultAccess);
+  useEffect(() => setAccess(defaultAccess), [defaultAccess]);
   const me = useMe();
   const [role, setRole] = useState<Role>("STUDENT");
   const [name, setName] = useState("");
@@ -232,7 +309,7 @@ function AddPerson({ onAdded }: { onAdded: (login: Login | null) => void }) {
     setError(null);
     setNotice(null);
     try {
-      const r = await api<{ person: Person; firstPassword: string | null }>("/api/v1/admin/people", {
+      const r = await api<{ person: Person; firstPassword: string | null; inviteLink: string | null }>("/api/v1/admin/people", {
         method: "POST",
         body: {
           role, name,
@@ -240,9 +317,11 @@ function AddPerson({ onAdded }: { onAdded: (login: Login | null) => void }) {
           username: student ? username : null,
           grade: grade === "" ? null : Number(grade),
           classes: classes.split(",").map((c) => c.trim()).filter(Boolean),
+          access: student ? access : null,
         },
       });
-      onAdded(r.firstPassword ? { name: r.person.name, username: r.person.username ?? "", password: r.firstPassword } : null);
+      onAdded(r.firstPassword || r.inviteLink
+        ? { name: r.person.name, username: r.person.username ?? "", password: r.firstPassword, link: r.inviteLink } : null);
       setNotice(student ? `${r.person.name} was added.` : me.mailOn
         ? `${r.person.name} was added and emailed an invitation to join.`
         : `${r.person.name} was added. Emails are switched off on this server, so use "Copy a new link" under Invitations and share it with them yourself.`);
@@ -295,6 +374,7 @@ function AddPerson({ onAdded }: { onAdded: (login: Login | null) => void }) {
           <p className="hint">Separate classes with commas. New classes are created for you.</p>
         </div>
       </div>
+      {student && <AccessChoice id="add-access" value={access} onChange={setAccess} />}
       {error && <div className="alert alert-danger" role="alert">{error}</div>}
       {notice && <div className="alert alert-success">{notice}</div>}
       <div className="row">
@@ -307,7 +387,9 @@ function AddPerson({ onAdded }: { onAdded: (login: Login | null) => void }) {
 }
 
 /** A CSV file: first checked (every problem listed, nothing saved), then saved all at once. */
-function ImportCsv({ onSaved }: { onSaved: (logins: Login[]) => void }) {
+function ImportCsv({ onSaved, defaultAccess }: { onSaved: (logins: Login[]) => void; defaultAccess: Access }) {
+  const [access, setAccess] = useState<Access>(defaultAccess);
+  useEffect(() => setAccess(defaultAccess), [defaultAccess]);
   const [csv, setCsv] = useState("");
   const [fileName, setFileName] = useState<string | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
@@ -318,10 +400,11 @@ function ImportCsv({ onSaved }: { onSaved: (logins: Login[]) => void }) {
     setBusy(true);
     setError(null);
     try {
-      const r = await api<ImportResult>(`/api/v1/admin/people/import?save=${save}`, { method: "POST", body: { csv } });
+      const r = await api<ImportResult>(`/api/v1/admin/people/import?save=${save}&access=${access}`, { method: "POST", body: { csv } });
       setResult(r);
       if (r.saved) {
-        onSaved(r.rows.filter((x) => x.firstPassword).map((x) => ({ name: x.name, username: x.login, password: x.firstPassword ?? "" })));
+        onSaved(r.rows.filter((x) => x.firstPassword || x.inviteLink)
+          .map((x) => ({ name: x.name, username: x.login, password: x.firstPassword, link: x.inviteLink })));
         setCsv("");
         setFileName(null);
       }
@@ -381,6 +464,7 @@ function ImportCsv({ onSaved }: { onSaved: (logins: Login[]) => void }) {
           </table>
         </div>
       )}
+      <AccessChoice id="import-access" value={access} onChange={setAccess} />
       <div className="row">
         <button className="btn btn-light" type="button" disabled={busy || !csv} onClick={() => send(false)}>Check the file</button>
         <button className="btn btn-primary" type="button" disabled={busy || !csv || !result || result.saved || result.problems > 0}
@@ -576,30 +660,35 @@ function OneRosterImport({ onApplied }: { onApplied: () => void }) {
 
 /** Students' first logins, shown once: print them, or download them as a CSV file. */
 function LoginCards({ logins, schoolLink, onClose }: { logins: Login[]; schoolLink: string; onClose: () => void }) {
-  const csv = "name,username,first password,sign in at\n"
-    + logins.map((l) => [l.name, l.username, l.password, schoolLink].map((v) => `"${v.replace(/"/g, '""')}"`).join(",")).join("\n") + "\n";
+  const csv = "name,username,first password,invite link,sign in at\n"
+    + logins.map((l) => [l.name, l.username, l.password ?? "", l.link ?? "", schoolLink].map((v) => `"${v.replace(/"/g, '""')}"`).join(",")).join("\n") + "\n";
+  const links = logins.some((l) => l.link);
   return (
     <section className="card stack login-cards" aria-labelledby="logins-title">
       <div className="row" style={{ justifyContent: "space-between" }}>
-        <h2 id="logins-title" style={{ margin: 0 }}>{logins.length === 1 ? "First login" : `${logins.length} first logins`}</h2>
+        <h2 id="logins-title" style={{ margin: 0 }}>{logins.length === 1 ? "How they get in" : `How ${logins.length} students get in`}</h2>
         <button type="button" className="btn btn-light" onClick={onClose}>Done</button>
       </div>
       <div className="alert alert-warning">
-        These first passwords are shown only now. Give each student theirs; they choose their own at their first sign-in.
+        {links
+          ? "These links are shown only now. Give each student theirs (print the cards, or share the link): it works once, for 7 days, and lets them choose their own password."
+          : "These first passwords are shown only now. Give each student theirs; they choose their own at their first sign-in."}
       </div>
       <div className="login-card-grid">
         {logins.slice(0, 60).map((l) => (
           <div className="login-card" key={l.username}>
             <strong>{l.name}</strong>
             <span>Username: <code>{l.username}</code></span>
-            <span>First password: <code>{l.password}</code></span>
+            {l.password && <span>First password: <code>{l.password}</code></span>}
+            {l.link && <LinkQr url={l.link} label={"QR code: " + l.name + "'s invite link"} size={112} />}
+            {l.link && <span className="hint" style={{ overflowWrap: "anywhere" }}>{l.link}</span>}
             <span className="muted">{schoolLink}</span>
           </div>
         ))}
       </div>
       {logins.length > 60 && <p className="muted">Showing 60 of {logins.length}. Download the file for all of them.</p>}
       <div className="row">
-        <button type="button" className="btn btn-primary" onClick={() => download("first-logins.csv", csv)}>Download as CSV</button>
+        <button type="button" className="btn btn-primary" onClick={() => download(links ? "student-links.csv" : "first-logins.csv", csv)}>Download as CSV</button>
         <button type="button" className="btn btn-light" onClick={() => window.print()}>Print</button>
       </div>
     </section>
