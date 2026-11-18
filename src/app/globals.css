@@ -578,7 +578,7 @@ input[type=email], input[type=tel], input[type=password], input[type=search] {
   body * { visibility: hidden; }
   .login-cards, .login-cards * { visibility: visible; }
   .login-cards { position: absolute; inset: 0; border: 0; }
-  .login-cards .btn, .login-cards .alert { display: none; }
+  .login-cards .btn, .login-cards .alert, .login-cards .email-link { display: none; }
 }
 
 /* Sign-up and sign-in (accounts) */

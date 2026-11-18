@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useState, type FormEvent } from "react";
 import { AppFrame } from "@/components/AppFrame";
 import { api, ApiError } from "@/lib/api";
 import { isSchoolAdmin, useMe } from "@/lib/me";
@@ -62,6 +62,8 @@ interface ImportResult {
 
 /** A student's way in, shown once: a first password, or an invite link to choose their own (D27). */
 interface Login {
+  /** Set when the school can email this student's link (adding one student, or a new link). */
+  userId?: string;
   name: string;
   username: string;
   password?: string | null;
@@ -167,7 +169,7 @@ function People() {
     try {
       const r = await api<{ firstPassword?: string; inviteLink?: string }>(`/api/v1/admin/people/${p.userId}/access`,
         { method: "POST", body: { access: how } });
-      setLogins([{ name: p.name, username: p.username ?? "", password: r.firstPassword ?? null, link: r.inviteLink ?? null }]);
+      setLogins([{ userId: p.userId, name: p.name, username: p.username ?? "", password: r.firstPassword ?? null, link: r.inviteLink ?? null }]);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Quizplayo could not reset the password.");
     }
@@ -321,7 +323,7 @@ function AddPerson({ onAdded, defaultAccess }: { onAdded: (login: Login | null) 
         },
       });
       onAdded(r.firstPassword || r.inviteLink
-        ? { name: r.person.name, username: r.person.username ?? "", password: r.firstPassword, link: r.inviteLink } : null);
+        ? { userId: r.person.userId, name: r.person.name, username: r.person.username ?? "", password: r.firstPassword, link: r.inviteLink } : null);
       setNotice(student ? `${r.person.name} was added.` : me.mailOn
         ? `${r.person.name} was added and emailed an invitation to join.`
         : `${r.person.name} was added. Emails are switched off on this server, so use "Copy a new link" under Invitations and share it with them yourself.`);
@@ -683,6 +685,7 @@ function LoginCards({ logins, schoolLink, onClose }: { logins: Login[]; schoolLi
             {l.link && <LinkQr url={l.link} label={"QR code: " + l.name + "'s invite link"} size={112} />}
             {l.link && <span className="hint" style={{ overflowWrap: "anywhere" }}>{l.link}</span>}
             <span className="muted">{schoolLink}</span>
+            {l.link && l.userId && <EmailLink userId={l.userId} link={l.link} name={l.name} />}
           </div>
         ))}
       </div>
@@ -692,6 +695,49 @@ function LoginCards({ logins, schoolLink, onClose }: { logins: Login[]; schoolLi
         <button type="button" className="btn btn-light" onClick={() => window.print()}>Print</button>
       </div>
     </section>
+  );
+}
+
+/**
+ * Emails one student's link to the adult who passes it on (a parent, or the school office). The server sends it only
+ * while it is still this student's current, unused link.
+ */
+function EmailLink({ userId, link, name }: { userId: string; link: string; name: string }) {
+  const id = useId();
+  const [to, setTo] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function send(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    setDone(null);
+    try {
+      const r = await api<{ message: string }>(`/api/v1/admin/people/${userId}/invite-link/email`, {
+        method: "POST", body: { link, to },
+      });
+      setDone(r.message);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Quizplayo could not email the link. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="stack email-link" onSubmit={send} style={{ gap: 6 }}>
+      <label htmlFor={id + "-to"}>Email {name}&apos;s link to</label>
+      <span id={id + "-hint"} className="hint">A parent or the school office, who passes it on.</span>
+      <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+        <input id={id + "-to"} type="email" required autoComplete="off" value={to} maxLength={254}
+          onChange={(e) => setTo(e.target.value)} aria-describedby={id + "-hint"} style={{ flex: "1 1 12rem", minWidth: 0 }} />
+        <button type="submit" className="btn btn-light" disabled={busy || to.trim() === ""}>{busy ? "Sending…" : "Email it"}</button>
+      </div>
+      {done && <span className="hint" role="status">{done}</span>}
+      {error && <span className="alert alert-danger" role="alert">{error}</span>}
+    </form>
   );
 }
 
