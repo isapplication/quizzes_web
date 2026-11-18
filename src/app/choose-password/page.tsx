@@ -32,6 +32,8 @@ export default function ChoosePasswordPage() {
     const t = tokenFromHash(window.location.hash);
     if (!t) { setMissing(true); return; }
     setToken(t);
+    // The token has done its job in the address: keep it out of history and the address bar.
+    window.history.replaceState(null, "", window.location.pathname);
     api<Lookup>("/api/v1/auth/student-invite/lookup", { method: "POST", body: { token: t } })
       .then(setLookup)
       .catch((e: unknown) => { setMissing(true); setError(e instanceof ApiError ? e.message : null); });
